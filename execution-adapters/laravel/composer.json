@@ -1,0 +1,23 @@
+{
+    "name": "vds/form-laravel",
+    "description": "VDS Universal Form Builder — Laravel/PHP trusted execution adapter (vds.expr/1 engine, server re-validation, RBAC, idempotency, redacted audit).",
+    "type": "library",
+    "license": "Apache-2.0",
+    "require": {
+        "php": ">=8.1"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10"
+    },
+    "suggest": {
+        "illuminate/http": "Required only for the LaravelController HTTP integration in a host app."
+    },
+    "autoload": {
+        "psr-4": {
+            "VdsForm\\": "src/"
+        }
+    },
+    "scripts": {
+        "conformance": "php tests/run-conformance.php"
+    }
+}
