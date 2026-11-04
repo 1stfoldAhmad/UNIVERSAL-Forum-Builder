@@ -32,7 +32,10 @@ Recorded at `1fba279`:
 | Package pack (`npm run pack:packages`) | pass (tarballs under `.release/`, not published) |
 | Fresh external-project smoke (`npm run test:packages`) | **PACKAGE SMOKE PASSED** (core/runtime/trusted Node + React/Vue peer imports) |
 
-CI evidence: see the branch run linked in `docs/FINAL_IMPLEMENTATION_AUDIT.md` (authoritative real-PHP Laravel gate). Local PHP results are PHP-WASM; real PHP 8.2 + Illuminate + PDO SQLite run in CI.
+CI evidence (authoritative real-PHP Laravel gate):
+- Run: https://github.com/1stfoldAhmad/UNIVERSAL-Forum-Builder/actions/runs/41880887766 (code commit `b64d004`) — **success**.
+- Jobs: TypeScript core + renderers + tools (incl. package build/pack/smoke) **success**; Django/Python **success**; Laravel/PHP full verification **success** (native PHP 8.2, Illuminate, PDO SQLite; `VDS_REQUIRE_ILLUMINATE=1`, `VDS_REQUIRE_PDO_SQLITE=1`).
+- Local PHP results are PHP-WASM; CI is the real-PHP evidence. A docs-only follow-up run is tracked on the same branch.
 
 ## Findings and dispositions
 

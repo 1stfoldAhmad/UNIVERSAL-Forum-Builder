@@ -14,7 +14,7 @@ Status labels: **Verified** · **Implemented-not-verified** · **Partial** · **
 > - Production VDS Database/API/Storage/Notification/Plugin-Host integrations remain **blocked** (contracts + named TEST adapters only).
 > - Packages are built/packed/tested but **not published**.
 >
-> CI evidence: branch run recorded below once available; Laravel real PHP 8.2 + Illuminate + PDO SQLite is the authoritative CI gate.
+> CI evidence: run [41880887766](https://github.com/1stfoldAhmad/UNIVERSAL-Forum-Builder/actions/runs/41880887766) (code commit `b64d004`) — **success** on all 3 jobs, including Laravel full verification on native PHP 8.2 + Illuminate + PDO SQLite and the fresh external-project package smoke test.
 
 
 > **SECURITY UPDATE (2026-11-04, branch `arena/65a47b1c-universal-forum-builder`):**
