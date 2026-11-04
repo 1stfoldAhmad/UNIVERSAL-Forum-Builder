@@ -8,6 +8,8 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@vds-form/types": "*"
+    "@vds-form/types": "*",
+    "@vds-form/expressions": "*",
+    "@vds-form/validation": "*"
   }
 }

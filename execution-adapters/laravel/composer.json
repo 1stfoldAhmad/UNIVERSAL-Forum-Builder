@@ -26,7 +26,9 @@
             "php tests/run-idempotency-parity.php",
             "php tests/run-submission.php",
             "php tests/run-controller.php",
-            "php tests/run-security.php"
+            "php tests/run-security.php",
+            "php tests/run-security-policy.php",
+            "php tests/run-remediation.php"
         ]
     }
 }

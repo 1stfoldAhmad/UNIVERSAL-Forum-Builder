@@ -18,6 +18,7 @@ export class DataSourceProviderRegistry {
     }
     this.providers.set(provider.scheme, provider);
   }
+  unregister(scheme: string): boolean { return this.providers.delete(scheme); }
   get(scheme: string): DataSourceProvider | undefined { return this.providers.get(scheme); }
   forRef(providerRef: string): DataSourceProvider | undefined {
     return this.providers.get(providerRef.split(':')[0] ?? '');

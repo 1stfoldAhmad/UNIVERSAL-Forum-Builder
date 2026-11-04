@@ -9,6 +9,8 @@ import type {
 import { evaluateBoolean, getPath, type EvalScope } from '@vds-form/expressions';
 import { defaultFieldRegistry, type FieldRegistry } from '@vds-form/fields';
 
+export * from './policy';
+
 export interface EffectiveFieldState {
   visibility: Record<string, boolean>;
   required: Record<string, boolean>;

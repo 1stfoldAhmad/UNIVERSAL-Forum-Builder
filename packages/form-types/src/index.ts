@@ -126,16 +126,40 @@ export interface LayoutNode {
   children?: LayoutNode[];
 }
 
+/**
+ * Typed contract for operation-specific inputs that are NOT form fields.
+ * Unknown properties are rejected by default; set additionalProperties=true
+ * only for an explicitly documented open object. Recursive object/array shapes
+ * are declared with properties/items.
+ */
+export interface OperationInputDef {
+  valueType: ValueType;
+  required?: boolean;
+  properties?: Record<string, OperationInputDef>;
+  items?: OperationInputDef;
+  additionalProperties?: boolean;
+}
+
+export interface SuccessHookDef {
+  operationRef: string;
+  inputMapping?: Record<string, string>;
+  condition?: Expr;
+  /** Typed non-field inputs accepted by the hook operation. */
+  operationInputs?: Record<string, OperationInputDef>;
+}
+
 export interface SubmissionDef {
   operationRef: string;
   operationVersion?: string;
   /** targetParam -> source key path. Default: identity of visible values. */
   inputMapping?: Record<string, string>;
+  /** Typed non-field inputs accepted by the submission operation. */
+  operationInputs?: Record<string, OperationInputDef>;
   includeHidden?: boolean;
   idempotency?: { strategy: 'auto' | 'stable'; stableKeys?: string[] };
   offline?: { queue: boolean };
   /** Post-success operations executed through registered executors (workflow:/notification:). */
-  onSuccess?: Array<{ operationRef: string; inputMapping?: Record<string, string>; condition?: Expr }>;
+  onSuccess?: SuccessHookDef[];
 }
 
 export interface PersistenceDef {
@@ -325,6 +349,9 @@ export interface SubmissionContext {
   specVersion: string;
   /** Mapped, normalized payload (never contains credentials). */
   values: Record<string, unknown>;
+  /** Trusted-server principal only. The headless runtime MUST NOT populate this
+   * from UI auth; trusted executors receive identity from their own server-side
+   * principal source (framework user, validated token, or executor config). */
   authenticatedContext?: AuthContext;
   idempotencyKey: string;
   correlationId: string;
@@ -513,5 +540,7 @@ export interface PluginManifest {
   provides: Array<{ kind: PluginRegistrationKind; name: string }>;
   dependencies?: Array<{ id: string; versionRange: string }>;
   permissions?: string[];
-  trust?: 'trusted' | 'sandboxed';
+  /** 'sandboxed'/'untrusted' are rejected until a real isolation adapter exists.
+   * Omitted trust is treated as host-registered trusted code (legacy). */
+  trust?: 'trusted' | 'sandboxed' | 'untrusted';
 }

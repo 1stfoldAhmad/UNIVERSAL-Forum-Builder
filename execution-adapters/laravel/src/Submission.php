@@ -142,15 +142,23 @@ final class TrustedSubmissionHandler
 
         $mapping = $submission['inputMapping'] ?? null;
         if ($mapping) {
-            $values = [];
+            $rawValues = [];
             foreach ($mapping as $param => $sourcePath) {
-                if (array_key_exists($param, $reqValues)) $values = self::setIn($values, $sourcePath, $reqValues[$param]);
+                if (array_key_exists($param, $reqValues)) $rawValues = self::setIn($rawValues, $sourcePath, $reqValues[$param]);
             }
         } else {
-            $values = $reqValues;
+            $rawValues = is_array($reqValues) ? $reqValues : [];
         }
 
-        [$state, ] = Validation::computeEffectiveState($ir, $values);
+        [$state, ] = Validation::computeEffectiveState($ir, $rawValues);
+        $prepared = Policy::prepareSubmissionValues($ir, $reqValues, $state['visibility'] ?? []);
+        if ($prepared['issues']) {
+            $issues = array_map(fn($i) => array_merge($i, ['source' => 'server']), $prepared['issues']);
+            $result = ['status' => 'server-validation-failed', 'issues' => $issues];
+            $audit($result, $operationRef, array_map(fn($i) => $i['code'], $issues));
+            return $result;
+        }
+        $values = $prepared['fieldValues'];
         $validation = Validation::validateValues($ir, $values, $state, 'submit');
         if (!$validation['valid']) {
             $issues = array_map(fn($i) => array_merge($i, ['source' => 'server']), $validation['issues']);
@@ -181,12 +189,37 @@ final class TrustedSubmissionHandler
             $field = null;
             foreach ($ir['fields'] as $f) if ($f['id'] === $fieldId) { $field = $f; break; }
             if (!$field) continue;
-            $provided = Expressions::getPath($values, $field['key']);
-            if ($provided === null) continue;
-            $decision = $this->rbac ? $this->rbac->evaluate($auth, $writePerms) : ['allowed' => false, 'missing' => $writePerms];
-            if (!$decision['allowed']) {
-                $result = ['status' => 'permission-denied', 'code' => 'FIELD_WRITE_DENIED', 'message' => "Not permitted to write field \"{$field['key']}\".", 'requiredPermissions' => $decision['missing']];
-                $audit($result, $operationRef, ['FIELD_WRITE_DENIED']);
+            $instances = array_values(array_filter(Validation::expandFieldInstances($ir, $values), fn($i) => $i['field']['id'] === $fieldId));
+            $paths = $instances ? array_map(fn($i) => $i['concreteKey'], $instances) : [$field['key']];
+            foreach ($paths as $path) {
+                $container = $values; $exists = true;
+                foreach (explode('.', $path) as $part) {
+                    if (is_array($container) && array_is_list($container)) {
+                        if (!preg_match('/^\d+$/', $part) || (int)$part >= count($container)) { $exists = false; break; }
+                        $container = $container[(int)$part];
+                    } elseif (is_array($container) && array_key_exists($part, $container)) {
+                        $container = $container[$part];
+                    } else { $exists = false; break; }
+                }
+                if (!$exists) continue;
+                $decision = $this->rbac ? $this->rbac->evaluate($auth, $writePerms) : ['allowed' => false, 'missing' => $writePerms];
+                if (!$decision['allowed']) {
+                    $result = ['status' => 'permission-denied', 'code' => 'FIELD_WRITE_DENIED', 'message' => "Not permitted to write field \"$path\".", 'requiredPermissions' => $decision['missing']];
+                    $audit($result, $operationRef, ['FIELD_WRITE_DENIED']);
+                    return $result;
+                }
+            }
+        }
+
+        $readPolicy = Policy::computeReadPolicy($ir, $auth, $this->rbac);
+
+        $payloadValues = array_merge($values, $prepared['operationInputs']);
+        [$payload, $payloadIssues] = Payload::build($ir, $payloadValues, $state, $submission);
+        foreach ($payloadIssues as $i) {
+            if (($i['severity'] ?? '') === 'error') {
+                $issues = array_map(fn($x) => array_merge($x, ['source' => 'server']), $payloadIssues);
+                $result = ['status' => 'server-validation-failed', 'issues' => $issues];
+                $audit($result, $operationRef, array_map(fn($x) => $x['code'], $issues));
                 return $result;
             }
         }
@@ -202,7 +235,14 @@ final class TrustedSubmissionHandler
         $scopeKey = Idempotency::scopedIdempotencyKey($auth['tenantId'] ?? null, $auth['userId'] ?? null, $ir['formId'], $operationRef, $request['idempotencyKey']);
         $fingerprint = Idempotency::payloadFingerprint($reqValues);
         $claim = $this->idempotency->claim($scopeKey, $fingerprint);
-        if ($claim['kind'] === 'replay') { $audit($claim['result'], $operationRef, ['IDEMPOTENT_REPLAY']); return $claim['result']; }
+        if ($claim['kind'] === 'replay') {
+            $replayResult = $claim['result'];
+            if (($replayResult['status'] ?? '') === 'succeeded' && isset($replayResult['data']) && is_array($replayResult['data'])) {
+                $replayResult['data'] = Policy::filterReadableValues($ir, $replayResult['data'], $readPolicy['denied']);
+            }
+            $audit($replayResult, $operationRef, ['IDEMPOTENT_REPLAY']);
+            return $replayResult;
+        }
         if ($claim['kind'] === 'conflict') {
             $result = ['status' => 'business-rejected', 'code' => 'IDEMPOTENCY_KEY_CONFLICT', 'message' => 'This idempotency key was already used with a different payload.'];
             $audit($result, $operationRef, ['IDEMPOTENCY_KEY_CONFLICT']);
@@ -215,7 +255,8 @@ final class TrustedSubmissionHandler
         }
 
         try {
-            $data = $handler($reqValues, ['auth' => $auth, 'idempotencyKey' => $request['idempotencyKey'], 'correlationId' => $request['correlationId'] ?? '', 'formId' => $ir['formId']]);
+            $data = $handler($payload, ['auth' => $auth, 'idempotencyKey' => $request['idempotencyKey'], 'correlationId' => $request['correlationId'] ?? '', 'formId' => $ir['formId']]);
+            if (is_array($data)) $data = Policy::filterReadableValues($ir, $data, $readPolicy['denied']);
             $result = ['status' => 'succeeded', 'operationRef' => $operationRef, 'data' => $data, 'idempotencyKey' => $request['idempotencyKey'], 'durationMs' => (int)((microtime(true) - $started) * 1000)];
         } catch (\Throwable $e) {
             // Read only PUBLIC custom properties. Standard Exception::$code is

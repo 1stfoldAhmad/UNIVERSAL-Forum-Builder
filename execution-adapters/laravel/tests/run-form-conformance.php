@@ -10,9 +10,9 @@
 declare(strict_types=1);
 
 require __DIR__ . '/lib.php';
-require __DIR__ . '/../src/Expressions.php';
-require __DIR__ . '/../src/Validation.php';
-require __DIR__ . '/../src/Payload.php';
+require_once __DIR__ . '/../src/Expressions.php';
+require_once __DIR__ . '/../src/Validation.php';
+require_once __DIR__ . '/../src/Payload.php';
 
 use VdsForm\Validation;
 use VdsForm\Payload;

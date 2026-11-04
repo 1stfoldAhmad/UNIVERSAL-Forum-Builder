@@ -15,7 +15,8 @@ import {
 } from '@vds-form/expressions';
 import { defaultFieldRegistry, type FieldRegistry } from '@vds-form/fields';
 import {
-  AsyncValidator, computeEffectiveState, expandFieldInstances, localize, validateValues,
+  AsyncValidator, collectUnknownPropertyIssues, computeEffectiveState, computeReadPolicy,
+  expandFieldInstances, filterReadableValues, isPathUnder, localize, readableTemplates, validateValues,
   type EffectiveFieldState,
 } from '@vds-form/validation';
 import {
@@ -38,6 +39,9 @@ export interface RuntimeOptions {
   offlineQueue?: OfflineQueueAdapter;
   uploadProvider?: UploadProvider;
   rbac?: RbacEvaluator;
+  /** UI-only auth for client-side pre-checks/draft scoping. NEVER sent as backend identity. */
+  uiAuth?: AuthContext;
+  /** @deprecated UI-only alias for uiAuth; never authoritative backend identity. */
   auth?: AuthContext;
   locale?: string;
   /** Approved non-secret context for expressions (today, locale facts…). */
@@ -112,6 +116,9 @@ export class FormController {
   private dependents = new Map<string, Set<string>>();
   private fieldByTemplate = new Map<string, NormalizedField>();
   private repeaters: NormalizedField[];
+  private uiAuth: AuthContext | undefined;
+  private readDenied: Set<string>;
+  private readTemplates: string[];
 
   constructor(options: RuntimeOptions) {
     this.opts = options;
@@ -121,6 +128,11 @@ export class FormController {
     this.now = options.now ?? (() => new Date());
     this.locale = options.locale ?? this.ir.localization.defaultLocale;
     this.repeaters = this.ir.fields.filter((f) => f.type === 'repeater');
+    this.uiAuth = options.uiAuth ?? options.auth;
+    const readPolicy = computeReadPolicy(this.ir, this.uiAuth, options.rbac);
+    this.readDenied = readPolicy.denied;
+    this.readTemplates = readableTemplates(this.ir, this.readDenied);
+    for (const i of readPolicy.issues) this.diagnostics.push({ code: i.code, message: i.message, path: i.path });
     for (const f of this.ir.fields) this.fieldByTemplate.set(f.key, f);
     for (const e of this.ir.dependencies.edges) {
       if (!this.dependents.has(e.from)) this.dependents.set(e.from, new Set());
@@ -148,7 +160,7 @@ export class FormController {
 
     if (this.ir.persistence.drafts?.enabled && this.opts.drafts) {
       this.transition('restoring-draft');
-      const scopeKey = draftScopeKey(this.ir.persistence, this.opts.auth, this.opts.deviceId);
+      const scopeKey = draftScopeKey(this.ir.persistence, this.uiAuth, this.opts.deviceId);
       const loaded = await loadDraftChecked(this.opts.drafts, this.ir.formId, this.ir.formVersion, scopeKey);
       if (loaded.status === 'restored' && loaded.envelope) {
         this.values = this.buildDefaults(loaded.envelope.values);
@@ -167,7 +179,7 @@ export class FormController {
   }
 
   private buildDefaults(initial: FormValues): FormValues {
-    let v: FormValues = structuredClone(initial);
+    let v: FormValues = filterReadableValues(this.ir, structuredClone(initial), this.readDenied);
     for (const f of this.ir.fields) {
       if (f.repeaterId) continue; // row defaults applied per row
       if (f.type === 'repeater') {
@@ -182,7 +194,7 @@ export class FormController {
         v = setIn(v, f.key, f.defaultValue);
       }
     }
-    return v;
+    return filterReadableValues(this.ir, v, this.readDenied);
   }
 
   private rowDefaults(repeater: NormalizedField): Record<string, unknown> {
@@ -232,7 +244,22 @@ export class FormController {
 
   /* ---------------- values ---------------- */
 
-  getValues(): FormValues { return structuredClone(this.values); }
+  getValues(): FormValues { return filterReadableValues(this.ir, structuredClone(this.values), this.readDenied); }
+
+  private isDeniedPath(path: string): boolean {
+    return this.readTemplates.some((t) => isPathUnder(path, t));
+  }
+
+  private redactIssues(issues: ValidationIssue[]): ValidationIssue[] {
+    return issues.filter((i) => !i.path || !this.isDeniedPath(i.path));
+  }
+
+  private redactResult(result: SubmissionResult): SubmissionResult {
+    if (result.status === 'succeeded' && result.data && typeof result.data === 'object' && !Array.isArray(result.data)) {
+      return { ...result, data: filterReadableValues(this.ir, result.data as FormValues, this.readDenied) };
+    }
+    return result;
+  }
 
   setValues(values: Partial<FormValues>): void {
     this.assertActive();
@@ -244,7 +271,10 @@ export class FormController {
     this.notify();
   }
 
-  getFieldValue(path: string): unknown { return getPath(this.values, path) ?? null; }
+  getFieldValue(path: string): unknown {
+    if (this.isDeniedPath(path)) return null;
+    return getPath(this.values, path) ?? null;
+  }
 
   setFieldValue(path: string, value: unknown, opts: { touch?: boolean } = {}): void {
     this.assertActive();
@@ -431,7 +461,8 @@ export class FormController {
 
   private sourceValues(): Record<string, unknown> {
     const out: Record<string, unknown> = {};
-    for (const [id, s] of Object.entries(this.dsStatus)) out[id] = s.options ?? null;
+    const deniedSources = new Set(this.ir.fields.filter((f) => f.optionSourceId && this.readDenied.has(f.id)).map((f) => f.optionSourceId!));
+    for (const [id, s] of Object.entries(this.dsStatus)) out[id] = deniedSources.has(id) ? null : (s.options ?? null);
     return out;
   }
 
@@ -442,7 +473,7 @@ export class FormController {
   async loadSource(sourceId: string): Promise<void> {
     const def = this.ir.dataSources.find((s) => s.id === sourceId);
     if (!def || this.state === 'disposed') return;
-    const { params, error } = evaluateParams(def, { values: this.values, context: this.opts.context });
+    const { params, error } = evaluateParams(def, { values: this.getValues(), context: this.opts.context });
     if (error) {
       this.dsStatus[sourceId] = { status: 'error', error: { code: 'PARAMS_EVAL_FAILED', message: error } };
       this.notify();
@@ -499,6 +530,7 @@ export class FormController {
   getOptions(fieldId: string): FieldOption[] {
     const f = this.ir.fields.find((x) => x.id === fieldId);
     if (!f) return [];
+    if (this.readDenied.has(f.id)) return [];
     if (f.options) return f.options;
     if (f.optionSourceId) return this.dsStatus[f.optionSourceId]?.options ?? [];
     return [];
@@ -597,8 +629,11 @@ export class FormController {
       sources: this.sourceValues(), fields: this.registry,
     });
     this.metrics.validations += 1;
-    this.syncIssues = result.issues;
-    const issues = [...result.issues, ...this.asyncIssues.values()];
+    const opRoots = new Set(Object.keys(this.ir.submission?.operationInputs ?? {}));
+    const fieldValues = Object.fromEntries(Object.entries(this.values).filter(([k]) => !opRoots.has(k)));
+    const unknownIssues = collectUnknownPropertyIssues(this.ir, fieldValues);
+    this.syncIssues = this.redactIssues([...result.issues, ...unknownIssues]);
+    const issues = this.redactIssues([...result.issues, ...unknownIssues, ...this.asyncIssues.values()]);
     const valid = !issues.some((i) => i.severity === 'error');
     this.transition(valid ? (this.isDirty() ? 'dirty' : 'ready') : 'invalid');
     this.snapshotCache = null;
@@ -610,13 +645,13 @@ export class FormController {
 
   async saveDraft(): Promise<void> {
     if (!this.opts.drafts || !this.ir.persistence.drafts?.enabled || this.state === 'disposed') return;
-    const scopeKey = draftScopeKey(this.ir.persistence, this.opts.auth, this.opts.deviceId);
+    const scopeKey = draftScopeKey(this.ir.persistence, this.uiAuth, this.opts.deviceId);
     this.draft = { status: 'saving' };
     this.notify();
     try {
       const envelope = makeDraftEnvelope(
         this.ir.formId, this.ir.formVersion, this.ir.specVersion, scopeKey,
-        this.values, this.ir.persistence.drafts.ttlSeconds, this.now(),
+        this.getValues(), this.ir.persistence.drafts.ttlSeconds, this.now(),
       );
       await this.opts.drafts.save(envelope);
       this.draft = { status: 'saved', savedAt: envelope.savedAt };
@@ -628,7 +663,7 @@ export class FormController {
 
   async clearDraft(): Promise<void> {
     if (!this.opts.drafts) return;
-    const scopeKey = draftScopeKey(this.ir.persistence, this.opts.auth, this.opts.deviceId);
+    const scopeKey = draftScopeKey(this.ir.persistence, this.uiAuth, this.opts.deviceId);
     await this.opts.drafts.clear(this.ir.formId, scopeKey);
     this.draft = { status: 'none' };
     this.notify();
@@ -679,7 +714,7 @@ export class FormController {
       }
       // Client-side RBAC pre-check when an evaluator is registered (server re-enforces).
       if (this.ir.security.submitPermissions?.length && this.opts.rbac) {
-        const decision = this.opts.rbac.evaluate(this.opts.auth, this.ir.security.submitPermissions);
+        const decision = this.opts.rbac.evaluate(this.uiAuth, this.ir.security.submitPermissions);
         if (!decision.allowed) {
           return this.finishSubmission({
             status: 'permission-denied', code: 'PERMISSION_DENIED',
@@ -706,7 +741,7 @@ export class FormController {
         if (!mayQueue) {
           return this.finishSubmission({ status: 'network-failure', code: 'OFFLINE', message: 'Offline and this operation does not permit queueing.', retryable: true }, 'submission-failed');
         }
-        const scopeKey = draftScopeKey(this.ir.persistence, this.opts.auth, this.opts.deviceId);
+        const scopeKey = draftScopeKey(this.ir.persistence, this.uiAuth, this.opts.deviceId);
         const record: QueuedSubmissionRecord = {
           id: this.newId(), operationRef: def.operationRef, operationVersion: def.operationVersion,
           formId: this.ir.formId, formVersion: this.ir.formVersion, specVersion: this.ir.specVersion,
@@ -724,7 +759,7 @@ export class FormController {
       this.submitController = new AbortController();
       const context: SubmissionContext = {
         formId: this.ir.formId, formVersion: this.ir.formVersion, specVersion: this.ir.specVersion,
-        values: payload, authenticatedContext: this.opts.auth,
+        values: payload,
         idempotencyKey, correlationId, signal: this.submitController.signal,
       };
       let result: SubmissionResult;
@@ -734,7 +769,9 @@ export class FormController {
         result = { status: 'network-failure', code: 'EXECUTOR_THREW', message: (e as Error).message, retryable: resolved.executor.contract.idempotent };
       }
       if (result.status === 'succeeded') {
-        await this.runSuccessHooks(def, result);
+        const succeeded = this.redactResult(result) as SubmissionResult & { status: 'succeeded' };
+        result = succeeded;
+        await this.runSuccessHooks(def, succeeded);
         if (this.ir.persistence.drafts?.enabled && this.opts.drafts) await this.clearDraft();
         return this.finishSubmission(result, 'submission-succeeded');
       }
@@ -762,7 +799,7 @@ export class FormController {
       }
       const payload: Record<string, unknown> = {};
       if (hook.inputMapping) {
-        for (const [k, path] of Object.entries(hook.inputMapping)) payload[k] = getPath(this.values, path) ?? null;
+        for (const [k, path] of Object.entries(hook.inputMapping)) payload[k] = getPath(this.getValues(), path) ?? null;
       }
       payload._result = result.data;
       try {
@@ -770,7 +807,7 @@ export class FormController {
           { operationRef: hook.operationRef },
           {
             formId: this.ir.formId, formVersion: this.ir.formVersion, specVersion: this.ir.specVersion,
-            values: payload, authenticatedContext: this.opts.auth,
+            values: payload,
             idempotencyKey: `${result.idempotencyKey}-hook-${hook.operationRef}`, correlationId: this.newId(),
           },
         );
@@ -784,6 +821,7 @@ export class FormController {
   }
 
   private finishSubmission(result: SubmissionResult, state: FormState): SubmissionResult {
+    result = this.redactResult(result);
     this.submission = {
       status: result.status === 'succeeded' ? 'succeeded' : result.status === 'queued-offline' ? 'queued' : 'failed',
       attemptId: this.submission.attemptId, result,
@@ -851,21 +889,29 @@ export class FormController {
     if (this.snapshotCache) return this.snapshotCache;
     const repeaterRows: Record<string, string[]> = {};
     for (const r of this.repeaters) repeaterRows[r.id] = [...(this.rowIds[r.id] ?? [])];
-    const dirtyPaths = this.computeDirtyPaths();
+    const dirtyPaths = this.computeDirtyPaths().filter((p) => !this.isDeniedPath(p));
+    const touched: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(this.touched)) if (!this.isDeniedPath(k)) touched[k] = v;
+    const dataSources = structuredClone(this.dsStatus);
+    for (const f of this.ir.fields) {
+      if (f.optionSourceId && this.readDenied.has(f.id) && dataSources[f.optionSourceId]) {
+        dataSources[f.optionSourceId] = { ...dataSources[f.optionSourceId], options: [] };
+      }
+    }
     this.snapshotCache = {
       state: this.state,
-      values: structuredClone(this.values),
+      values: this.getValues(),
       dirty: dirtyPaths.length > 0,
       dirtyPaths,
-      touched: { ...this.touched },
-      focusedPath: this.focusedPath,
-      issues: [...this.syncIssues, ...this.asyncIssues.values()],
+      touched,
+      focusedPath: this.focusedPath && !this.isDeniedPath(this.focusedPath) ? this.focusedPath : null,
+      issues: this.redactIssues([...this.syncIssues, ...this.asyncIssues.values()]),
       visibility: { ...this.effective.visibility },
       disabled: { ...this.effective.disabled },
       readonly: { ...this.effective.readonly },
       required: { ...this.effective.required },
       repeaterRows,
-      dataSources: structuredClone(this.dsStatus),
+      dataSources,
       asyncValidation: { ...this.asyncStatus },
       submission: structuredClone(this.submission),
       draft: { ...this.draft },
@@ -908,11 +954,12 @@ export class FormController {
 
   fieldSlice(path: string): unknown {
     const field = this.fieldForConcretePath(path);
+    const denied = this.isDeniedPath(path);
     return {
-      value: getPath(this.values, path) ?? null,
-      touched: this.touched[path] === true,
-      focused: this.focusedPath === path,
-      issues: [...this.syncIssues, ...this.asyncIssues.values()].filter((i) => i.path === path),
+      value: denied ? null : (getPath(this.values, path) ?? null),
+      touched: denied ? false : this.touched[path] === true,
+      focused: denied ? false : this.focusedPath === path,
+      issues: denied ? [] : [...this.syncIssues, ...this.asyncIssues.values()].filter((i) => i.path === path),
       visible: field ? this.effective.visibility[field.id] !== false : true,
       required: field ? this.effective.required[field.id] === true : false,
       disabled: field ? this.effective.disabled[field.id] === true : false,
@@ -941,7 +988,9 @@ export class FormController {
   }
 
   get uploadProvider(): UploadProvider | undefined { return this.opts.uploadProvider; }
-  get auth(): AuthContext | undefined { return this.opts.auth; }
+  /** UI-only auth context. Never use as a trusted backend principal. */
+  get auth(): AuthContext | undefined { return this.uiAuth; }
+  get uiAuthContext(): AuthContext | undefined { return this.uiAuth; }
 }
 
 export function createFormController(options: RuntimeOptions): FormController {

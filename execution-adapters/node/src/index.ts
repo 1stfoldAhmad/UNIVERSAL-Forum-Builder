@@ -20,7 +20,8 @@ import type {
   SubmissionContext, SubmissionExecutor, SubmissionResult, ValidationIssue,
 } from '@vds-form/types';
 import { compileForm } from '@vds-form/compiler';
-import { computeEffectiveState, validateValues } from '@vds-form/validation';
+import { computeEffectiveState, computeReadPolicy, expandFieldInstances, filterReadableValues, prepareSubmissionValues, validateValues } from '@vds-form/validation';
+import { buildSubmissionPayload } from '@vds-form/submission';
 import { getPath, setIn } from '@vds-form/expressions';
 import {
   InMemoryIdempotencyStore, payloadFingerprint, scopedIdempotencyKey,
@@ -158,19 +159,33 @@ export class TrustedSubmissionHandler {
       return result;
     }
 
-    // Reconstruct field-keyed values from the mapped payload (reverse inputMapping).
-    let values: Record<string, unknown> = {};
+    // Reconstruct field-keyed values for effective state, then apply the strict
+    // submission policy (unknown roots, hidden descendants, typed operation
+    // inputs) before validation/execution. The executed payload is rebuilt from
+    // cleaned values — the raw request is never forwarded to an operation.
+    let rawValues: Record<string, unknown> = {};
     const mapping = ir.submission?.inputMapping;
     if (mapping && Object.keys(mapping).length) {
       for (const [param, sourcePath] of Object.entries(mapping)) {
-        if (Object.hasOwn(request.values, param)) values = setIn(values, sourcePath, request.values[param]);
+        if (Object.hasOwn(request.values, param)) rawValues = setIn(rawValues, sourcePath, request.values[param]);
       }
     } else {
-      values = request.values;
+      rawValues = request.values;
     }
 
+    const { state } = computeEffectiveState(ir, rawValues);
+    const prepared = prepareSubmissionValues(ir, request.values, state.visibility);
+    if (prepared.issues.length) {
+      const result: SubmissionResult = {
+        status: 'server-validation-failed',
+        issues: prepared.issues.map((i) => ({ ...i, source: 'server' as const })),
+      };
+      this.audit(ir, operationRef, request, auth, result, prepared.issues.map((i) => i.code));
+      return result;
+    }
+    const values = prepared.fieldValues;
+
     // Server-side effective state + full re-validation (never trusts the client).
-    const { state } = computeEffectiveState(ir, values);
     const validation = validateValues(ir, values, state, { phase: 'submit' });
     if (!validation.valid) {
       const result: SubmissionResult = {
@@ -197,19 +212,37 @@ export class TrustedSubmissionHandler {
         return result;
       }
     }
-    // Field-level write protection.
+    // Field-level write protection (concrete repeater instances, not templates).
     for (const [fieldId, access] of Object.entries(ir.security.fieldAccess ?? {})) {
       if (!access.write?.length) continue;
       const field = ir.fields.find((f) => f.id === fieldId);
       if (!field) continue;
-      const provided = getPath(values, field.key);
-      if (provided === undefined || provided === null) continue;
-      const decision = this.options.rbac?.evaluate(auth, access.write) ?? { allowed: false, missing: access.write };
-      if (!decision.allowed) {
-        const result: SubmissionResult = { status: 'permission-denied', code: 'FIELD_WRITE_DENIED', message: `Not permitted to write field "${field.key}".`, requiredPermissions: decision.missing };
-        this.audit(ir, operationRef, request, auth, result, ['FIELD_WRITE_DENIED']);
-        return result;
+      const instances = expandFieldInstances(ir, values).filter((i) => i.field.id === fieldId);
+      const paths = instances.length ? instances.map((i) => i.concreteKey) : [field.key];
+      for (const path of paths) {
+        const provided = getPath(values, path);
+        if (provided === undefined) continue;
+        const decision = this.options.rbac?.evaluate(auth, access.write) ?? { allowed: false, missing: access.write };
+        if (!decision.allowed) {
+          const result: SubmissionResult = { status: 'permission-denied', code: 'FIELD_WRITE_DENIED', message: `Not permitted to write field "${path}".`, requiredPermissions: decision.missing };
+          this.audit(ir, operationRef, request, auth, result, ['FIELD_WRITE_DENIED']);
+          return result;
+        }
       }
+    }
+
+    const readPolicy = computeReadPolicy(ir, auth, this.options.rbac);
+
+    const payloadValues = { ...values, ...prepared.operationInputs };
+    const built = buildSubmissionPayload(ir, payloadValues, state, ir.submission ?? { operationRef });
+    const payloadErrors = built.issues.filter((i) => i.severity === 'error');
+    if (payloadErrors.length) {
+      const result: SubmissionResult = {
+        status: 'server-validation-failed',
+        issues: payloadErrors.map((i) => ({ ...i, source: 'server' as const })),
+      };
+      this.audit(ir, operationRef, request, auth, result, payloadErrors.map((i) => i.code));
+      return result;
     }
 
     const handler = this.options.operations.resolve(operationRef);
@@ -228,8 +261,12 @@ export class TrustedSubmissionHandler {
     const fingerprint = payloadFingerprint(request.values);
     const claim = await this.idempotency.claim(scopeKey, fingerprint);
     if (claim.kind === 'replay') {
-      this.audit(ir, operationRef, request, auth, claim.result, ['IDEMPOTENT_REPLAY']);
-      return claim.result;
+      let replayResult = claim.result;
+      if (replayResult.status === 'succeeded' && replayResult.data && typeof replayResult.data === 'object' && !Array.isArray(replayResult.data)) {
+        replayResult = { ...replayResult, data: filterReadableValues(ir, replayResult.data as Record<string, unknown>, readPolicy.denied) };
+      }
+      this.audit(ir, operationRef, request, auth, replayResult, ['IDEMPOTENT_REPLAY']);
+      return replayResult;
     }
     if (claim.kind === 'conflict') {
       const result: SubmissionResult = { status: 'business-rejected', code: 'IDEMPOTENCY_KEY_CONFLICT', message: 'This idempotency key was already used with a different payload.' };
@@ -244,10 +281,13 @@ export class TrustedSubmissionHandler {
 
     let result: SubmissionResult;
     try {
-      const data = await handler(request.values, {
+      let data = await handler(built.payload, {
         auth, idempotencyKey: request.idempotencyKey,
         correlationId: request.correlationId, formId: ir.formId,
       });
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        data = filterReadableValues(ir, data as Record<string, unknown>, readPolicy.denied);
+      }
       result = { status: 'succeeded', operationRef, data, idempotencyKey: request.idempotencyKey, durationMs: Date.now() - started };
     } catch (e) {
       const err = e as { code?: string; message?: string; issues?: ValidationIssue[] };
@@ -282,23 +322,34 @@ export class TrustedSubmissionHandler {
   }
 }
 
+export interface NodeExecutorOptions {
+  /** Server-derived principal captured by the trusted host (e.g. session user). */
+  auth?: AuthContext;
+  /** Preferred: resolve the verified principal at execution time. */
+  resolveAuth?: () => AuthContext | undefined;
+}
+
 /**
  * Wrap the trusted handler as a SubmissionExecutor for a scheme (e.g. `api`,
- * `database`). Registered by the host project — never auto-created. The
- * principal is passed as the trusted `auth` argument, sourced from the runtime's
- * authenticated context (which the host populates from verified server state).
+ * `database`). Registered by the host project — never auto-created.
+ *
+ * IDENTITY BOUNDARY: the executor NEVER reads `context.authenticatedContext`.
+ * The headless runtime's UI auth is not a backend principal. The trusted host
+ * supplies identity via `resolveAuth`/`auth` when constructing the executor, or
+ * calls `handler.handle(request, serverAuth)` directly.
  */
-export function createNodeExecutor(handler: TrustedSubmissionHandler, scheme: string): SubmissionExecutor {
+export function createNodeExecutor(handler: TrustedSubmissionHandler, scheme: string, options: NodeExecutorOptions = {}): SubmissionExecutor {
   return {
     scheme,
     contract: { supportsOfflineQueue: false, idempotent: true, trusted: true },
     supports(action: SubmissionAction): boolean { return handler.supportsOperation(action.operationRef); },
     async execute(action: SubmissionAction, context: SubmissionContext): Promise<SubmissionResult> {
+      const principal = options.resolveAuth ? options.resolveAuth() : options.auth;
       return handler.handle({
         formId: context.formId, formVersion: context.formVersion, values: context.values,
         operationRef: action.operationRef,
         idempotencyKey: context.idempotencyKey, correlationId: context.correlationId,
-      }, context.authenticatedContext);
+      }, principal);
     },
   };
 }

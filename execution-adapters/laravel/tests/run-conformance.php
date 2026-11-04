@@ -9,7 +9,7 @@
  */
 declare(strict_types=1);
 
-require __DIR__ . '/../src/Expressions.php';
+require_once __DIR__ . '/../src/Expressions.php';
 
 use VdsForm\Expressions;
 

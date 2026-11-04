@@ -13,11 +13,11 @@
 declare(strict_types=1);
 
 require __DIR__ . '/lib.php';
-require __DIR__ . '/../src/Expressions.php';
-require __DIR__ . '/../src/Validation.php';
-require __DIR__ . '/../src/Idempotency.php';
-require __DIR__ . '/../src/Submission.php';
-require __DIR__ . '/../src/LaravelController.php';
+require_once __DIR__ . '/../src/Expressions.php';
+require_once __DIR__ . '/../src/Validation.php';
+require_once __DIR__ . '/../src/Idempotency.php';
+require_once __DIR__ . '/../src/Submission.php';
+require_once __DIR__ . '/../src/LaravelController.php';
 
 use VdsForm\TrustedSubmissionHandler;
 use VdsForm\OperationRegistry;
