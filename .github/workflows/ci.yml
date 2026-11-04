@@ -56,6 +56,8 @@ jobs:
         run: python3 -m pip install pytest django
       - name: Run Django adapter tests (shared conformance + trusted handler + view)
         run: cd execution-adapters/django && python3 -m pytest -q
+      - name: Run Django renderer tests (SSR + trusted view)
+        run: cd adapters/django && python3 -m pytest -q
 
   laravel:
     name: Laravel/PHP trusted adapter (full verification)
@@ -75,3 +77,61 @@ jobs:
           VDS_REQUIRE_ILLUMINATE: '1'   # fail if the real-Request integration would be skipped
           VDS_REQUIRE_PDO_SQLITE: '1'   # fail if the durable-restart check would be skipped
         run: cd execution-adapters/laravel && composer test
+      - name: Run Laravel renderer suite (framework-free, real PHP)
+        run: php adapters/laravel/tests/run-renderer.php
+
+  laravel13:
+    name: Laravel 13 renderer integration (real PHP 8.3 + Illuminate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo_sqlite, ctype, filter, hash, openssl, session, tokenizer
+          coverage: none
+          tools: composer:v2
+      - name: Install Laravel 13 + path-linked execution adapter
+        run: cd adapters/laravel && composer update --no-interaction --prefer-dist --no-progress
+      - name: Run real Laravel 13 integration check
+        run: cd adapters/laravel && php tests/run-laravel13.php
+
+  flutter:
+    name: Flutter renderer (Dart conformance + controller + widgets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Flutter test (62-case expression conformance + controller + widget)
+        run: cd adapters/flutter && flutter test
+
+  compose:
+    name: Compose renderer (Kotlin conformance + controller + UI compile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Core tests (62-case expression conformance + controller)
+        run: cd adapters/compose && gradle :core:test --no-daemon
+      - name: Compose UI compile evidence
+        run: cd adapters/compose && gradle :ui:compileDebugKotlin --no-daemon
+
+  swiftui:
+    name: SwiftUI renderer (Swift conformance + controller + UI build)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Swift test (62-case expression conformance + controller; builds VdsFormUI)
+        run: cd adapters/swiftui && swift test

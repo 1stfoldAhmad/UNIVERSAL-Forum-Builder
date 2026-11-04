@@ -14,7 +14,7 @@ export default defineWorkspace([
         'tests/**/*.test.ts',
         'adapters/node/tests/**/*.test.ts',
       ],
-      exclude: ['**/node_modules/**', '**/dist/**', 'vendor/**'],
+      exclude: ['**/node_modules/**', '**/dist/**', 'vendor/**', '**/*.hydrate.test.ts'],
     },
   },
   {
