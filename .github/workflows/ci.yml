@@ -136,7 +136,7 @@ jobs:
           gradle :core:test --no-daemon --console=plain > /tmp/core.log 2>&1
           code=$?
           tail -80 /tmp/core.log
-          if [ $code -ne 0 ]; then grep -E '^e: |error:|FAILED|Caused by|> Task' /tmp/core.log | head -50 | sed 's/^/::error::/'; fi
+          if [ $code -ne 0 ]; then tail -50 /tmp/core.log | sed 's/^/::error::/'; fi
           exit $code
       - name: Compose UI compile evidence
         run: |
@@ -144,7 +144,7 @@ jobs:
           gradle :ui:compileDebugKotlin --no-daemon --console=plain > /tmp/ui.log 2>&1
           code=$?
           tail -80 /tmp/ui.log
-          if [ $code -ne 0 ]; then grep -E '^e: |error:|FAILED|Caused by|> Task' /tmp/ui.log | head -50 | sed 's/^/::error::/'; fi
+          if [ $code -ne 0 ]; then tail -50 /tmp/ui.log | sed 's/^/::error::/'; fi
           exit $code
 
   swiftui:
@@ -160,5 +160,5 @@ jobs:
           swift test > /tmp/swift.log 2>&1
           code=$?
           tail -80 /tmp/swift.log
-          if [ $code -ne 0 ]; then grep -E 'error:|failed|XCTAssert' /tmp/swift.log | head -50 | sed 's/^/::error::/'; fi
+          if [ $code -ne 0 ]; then tail -50 /tmp/swift.log | sed 's/^/::error::/'; fi
           exit $code
