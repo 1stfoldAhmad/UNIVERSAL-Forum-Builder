@@ -1,0 +1,56 @@
+{
+  "format": "vds.form",
+  "specVersion": "1.0.0",
+  "id": "field-survey",
+  "metadata": {
+    "name": "Field Survey",
+    "version": "1.0.0"
+  },
+  "fields": [
+    {
+      "id": "site",
+      "type": "text",
+      "key": "survey.site",
+      "label": "Site",
+      "required": true
+    },
+    {
+      "id": "rating",
+      "type": "rating",
+      "key": "survey.rating",
+      "label": "Condition rating",
+      "required": true,
+      "validation": {
+        "min": 1,
+        "max": 5
+      }
+    },
+    {
+      "id": "notes",
+      "type": "textarea",
+      "key": "survey.notes",
+      "label": "Notes"
+    }
+  ],
+  "persistence": {
+    "drafts": {
+      "enabled": true,
+      "scope": "user"
+    },
+    "offline": {
+      "enabled": true
+    }
+  },
+  "submission": {
+    "operationRef": "test:survey.create",
+    "offline": {
+      "queue": true
+    },
+    "idempotency": {
+      "strategy": "stable",
+      "stableKeys": [
+        "survey.site"
+      ]
+    }
+  }
+}

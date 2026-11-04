@@ -1,0 +1,25 @@
+{
+  "name": "@vds-form/core",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@vds-form/types": "*",
+    "@vds-form/spec": "*",
+    "@vds-form/expressions": "*",
+    "@vds-form/fields": "*",
+    "@vds-form/compiler": "*",
+    "@vds-form/validation": "*",
+    "@vds-form/runtime": "*",
+    "@vds-form/data-sources": "*",
+    "@vds-form/persistence": "*",
+    "@vds-form/submission": "*",
+    "@vds-form/plugins": "*",
+    "@vds-form/inspector": "*",
+    "@vds-form/migrations": "*"
+  }
+}

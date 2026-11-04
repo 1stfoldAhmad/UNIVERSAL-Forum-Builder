@@ -1,0 +1,179 @@
+{
+  "format": "vds.form",
+  "specVersion": "1.0.0",
+  "id": "customer-registration",
+  "metadata": {
+    "name": {
+      "en": "Customer Registration",
+      "ur": "کسٹمر رجسٹریشن"
+    },
+    "description": "Register a new customer",
+    "version": "1.2.0"
+  },
+  "model": {
+    "entityRef": "database:customer"
+  },
+  "fields": [
+    {
+      "id": "customerType",
+      "type": "select",
+      "key": "customer.type",
+      "label": {
+        "en": "Customer type",
+        "ur": "کسٹمر کی قسم"
+      },
+      "required": true,
+      "defaultValue": "individual",
+      "options": [
+        {
+          "value": "individual",
+          "label": "Individual"
+        },
+        {
+          "value": "business",
+          "label": "Business"
+        }
+      ]
+    },
+    {
+      "id": "fullName",
+      "type": "text",
+      "key": "customer.name",
+      "label": {
+        "en": "Full name",
+        "ur": "پورا نام"
+      },
+      "required": true,
+      "validation": {
+        "minLength": 2,
+        "maxLength": 120
+      }
+    },
+    {
+      "id": "companyName",
+      "type": "text",
+      "key": "customer.companyName",
+      "label": "Company name",
+      "validation": {
+        "maxLength": 160
+      },
+      "hidden": true
+    },
+    {
+      "id": "taxId",
+      "type": "text",
+      "key": "customer.taxId",
+      "label": "Tax ID",
+      "validation": {
+        "pattern": "^[A-Z0-9-]{6,20}$"
+      },
+      "hidden": true
+    },
+    {
+      "id": "email",
+      "type": "email",
+      "key": "customer.email",
+      "label": "Email",
+      "required": true,
+      "validation": {
+        "format": "email"
+      }
+    },
+    {
+      "id": "age",
+      "type": "integer",
+      "key": "customer.age",
+      "label": "Age",
+      "validation": {
+        "min": 0,
+        "max": 130
+      }
+    },
+    {
+      "id": "consent",
+      "type": "consent",
+      "key": "customer.consent",
+      "label": "I agree to the terms",
+      "required": true
+    }
+  ],
+  "logic": {
+    "conditions": [
+      {
+        "id": "businessFields",
+        "when": {
+          "op": "eq",
+          "args": [
+            {
+              "ref": "field:customer.type"
+            },
+            {
+              "const": "business"
+            }
+          ]
+        },
+        "effects": [
+          {
+            "fieldId": "companyName",
+            "set": {
+              "visible": true,
+              "required": true
+            }
+          },
+          {
+            "fieldId": "taxId",
+            "set": {
+              "visible": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "validation": {
+    "async": [
+      {
+        "id": "emailUnique",
+        "path": "customer.email",
+        "operationRef": "test:customer.emailUnique",
+        "debounceMs": 200,
+        "timeoutMs": 3000,
+        "message": "This email is already registered."
+      }
+    ]
+  },
+  "submission": {
+    "operationRef": "test:customer.create",
+    "inputMapping": {
+      "name": "customer.name",
+      "email": "customer.email",
+      "type": "customer.type",
+      "companyName": "customer.companyName",
+      "taxId": "customer.taxId",
+      "age": "customer.age",
+      "consent": "customer.consent"
+    },
+    "idempotency": {
+      "strategy": "auto"
+    }
+  },
+  "persistence": {
+    "drafts": {
+      "enabled": true,
+      "scope": "user",
+      "ttlSeconds": 604800
+    }
+  },
+  "security": {
+    "submitPermissions": [
+      "customer:create"
+    ]
+  },
+  "localization": {
+    "defaultLocale": "en",
+    "locales": [
+      "en",
+      "ur"
+    ]
+  }
+}

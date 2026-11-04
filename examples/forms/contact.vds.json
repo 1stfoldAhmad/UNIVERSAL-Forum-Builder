@@ -1,0 +1,12 @@
+{
+  "format": "vds.form",
+  "specVersion": "1.0.0",
+  "id": "contact",
+  "metadata": { "name": "Contact Us", "version": "1.0.0" },
+  "fields": [
+    { "id": "name", "type": "text", "key": "name", "label": "Full name", "required": true, "validation": { "minLength": 2, "maxLength": 120 } },
+    { "id": "email", "type": "email", "key": "email", "label": "Email", "required": true },
+    { "id": "message", "type": "textarea", "key": "message", "label": "Message", "required": true, "validation": { "minLength": 10, "maxLength": 2000 }, "ui": { "rows": 5 } }
+  ],
+  "submission": { "operationRef": "test:contact.create" }
+}

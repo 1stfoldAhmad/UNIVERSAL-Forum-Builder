@@ -1,0 +1,20 @@
+{
+  "name": "@vds-form/example-headless",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@vds-form/core": "*",
+    "@vds-form/vds-contracts": "*",
+    "@vds-form/vds-logic": "*",
+    "@vds-form/execution-node": "*"
+  },
+  "private": true,
+  "scripts": {
+    "start": "tsx src/main.ts"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@vds-form/cli",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@vds-form/core": "*",
+    "@vds-form/spec": "*",
+    "@vds-form/compiler": "*",
+    "@vds-form/migrations": "*",
+    "@vds-form/conformance": "*",
+    "@vds-form/inspector": "*",
+    "@vds-form/fields": "*"
+  },
+  "bin": {
+    "vds-form": "./src/bin.ts"
+  }
+}

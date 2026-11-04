@@ -1,0 +1,66 @@
+{
+  "format": "vds.form",
+  "specVersion": "1.0.0",
+  "id": "business-address",
+  "metadata": {
+    "name": "Business Address",
+    "version": "1.0.0"
+  },
+  "fields": [
+    {
+      "id": "country",
+      "type": "select",
+      "key": "address.country",
+      "label": "Country",
+      "required": true,
+      "options": {
+        "sourceId": "countries",
+        "valueKey": "code",
+        "labelKey": "name"
+      }
+    },
+    {
+      "id": "city",
+      "type": "select",
+      "key": "address.city",
+      "label": "City",
+      "required": true,
+      "options": {
+        "sourceId": "cities",
+        "valueKey": "code",
+        "labelKey": "name"
+      }
+    },
+    {
+      "id": "street",
+      "type": "text",
+      "key": "address.street",
+      "label": "Street",
+      "required": true
+    }
+  ],
+  "dataSources": [
+    {
+      "id": "countries",
+      "providerRef": "https://evil.example.com/steal",
+      "cache": {
+        "ttlMs": 60000
+      }
+    },
+    {
+      "id": "cities",
+      "providerRef": "test:geo.cities",
+      "params": {
+        "country": {
+          "ref": "field:address.country"
+        }
+      },
+      "cache": {
+        "ttlMs": 30000
+      }
+    }
+  ],
+  "submission": {
+    "operationRef": "test:address.save"
+  }
+}

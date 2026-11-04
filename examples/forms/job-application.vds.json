@@ -1,0 +1,146 @@
+{
+  "format": "vds.form",
+  "specVersion": "1.0.0",
+  "id": "job-application",
+  "metadata": {
+    "name": "Job Application",
+    "version": "1.0.0"
+  },
+  "fields": [
+    {
+      "id": "applicantName",
+      "type": "text",
+      "key": "applicant.name",
+      "label": "Name",
+      "required": true
+    },
+    {
+      "id": "applicantEmail",
+      "type": "email",
+      "key": "applicant.email",
+      "label": "Email",
+      "required": true
+    },
+    {
+      "id": "position",
+      "type": "select",
+      "key": "application.position",
+      "label": "Position",
+      "required": true,
+      "options": [
+        {
+          "value": "dev",
+          "label": "Developer"
+        },
+        {
+          "value": "design",
+          "label": "Designer"
+        },
+        {
+          "value": "pm",
+          "label": "Product Manager"
+        }
+      ]
+    },
+    {
+      "id": "portfolio",
+      "type": "url",
+      "key": "application.portfolio",
+      "label": "Portfolio URL",
+      "hidden": true,
+      "validation": {
+        "format": "url"
+      }
+    },
+    {
+      "id": "cv",
+      "type": "file",
+      "key": "application.cv",
+      "label": "CV (PDF)",
+      "required": true,
+      "validation": {
+        "accept": [
+          "application/pdf"
+        ],
+        "maxSizeBytes": 5242880
+      }
+    },
+    {
+      "id": "coverLetter",
+      "type": "textarea",
+      "key": "application.coverLetter",
+      "label": "Cover letter",
+      "validation": {
+        "maxLength": 4000
+      }
+    }
+  ],
+  "layout": {
+    "type": "steps",
+    "title": "Application",
+    "children": [
+      {
+        "type": "step",
+        "id": "personal",
+        "title": "Personal",
+        "fieldRefs": [
+          "applicantName",
+          "applicantEmail"
+        ]
+      },
+      {
+        "type": "step",
+        "id": "role",
+        "title": "Role",
+        "fieldRefs": [
+          "position",
+          "portfolio"
+        ]
+      },
+      {
+        "type": "step",
+        "id": "docs",
+        "title": "Documents",
+        "fieldRefs": [
+          "cv",
+          "coverLetter"
+        ]
+      },
+      {
+        "type": "summary",
+        "id": "review",
+        "title": "Review"
+      }
+    ]
+  },
+  "logic": {
+    "conditions": [
+      {
+        "id": "portfolioForDesign",
+        "when": {
+          "op": "eq",
+          "args": [
+            {
+              "ref": "field:application.position"
+            },
+            {
+              "const": "design"
+            }
+          ]
+        },
+        "effects": [
+          {
+            "fieldId": "portfolio",
+            "set": {
+              "visible": true,
+              "required": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "submission": {
+    "operationRef": "test:application.create"
+  }
+}

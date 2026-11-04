@@ -1,0 +1,330 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vds.1stfold.dev/schemas/vds-form/1.0.0.json",
+  "title": "VDS Universal Form Standard 1.0.0",
+  "description": "Canonical platform-independent form document (format: vds.form). Structural schema; dynamic semantics are enforced by the compiler.",
+  "type": "object",
+  "required": ["format", "specVersion", "id", "metadata", "fields"],
+  "additionalProperties": false,
+  "properties": {
+    "format": { "const": "vds.form" },
+    "specVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*[a-z0-9]$", "minLength": 2, "maxLength": 128 },
+    "metadata": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/$defs/localizedText" },
+        "description": { "$ref": "#/$defs/localizedText" },
+        "version": { "type": "string", "maxLength": 64 }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "entityRef": { "type": "string", "pattern": "^[a-z]+:[A-Za-z0-9._-]+$" } }
+    },
+    "fields": { "type": "array", "minItems": 1, "maxItems": 2000, "items": { "$ref": "#/$defs/field" } },
+    "layout": { "$ref": "#/$defs/layoutNode" },
+    "logic": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "conditions": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/$defs/condition" } },
+        "formulas": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/$defs/formula" } }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "crossField": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/crossFieldRule" } },
+        "async": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/asyncRule" } }
+      }
+    },
+    "dataSources": { "type": "array", "maxItems": 200, "items": { "$ref": "#/$defs/dataSource" } },
+    "submission": { "$ref": "#/$defs/submission" },
+    "persistence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "drafts": {
+          "type": "object",
+          "required": ["enabled"],
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "scope": { "enum": ["user", "tenant", "device"] },
+            "ttlSeconds": { "type": "integer", "minimum": 1, "maximum": 31536000 }
+          }
+        },
+        "offline": { "type": "object", "required": ["enabled"], "additionalProperties": false, "properties": { "enabled": { "type": "boolean" } } }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "submitPermissions": { "type": "array", "items": { "type": "string" }, "maxItems": 100 },
+        "fieldAccess": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "read": { "type": "array", "items": { "type": "string" } },
+              "write": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "localization": {
+      "type": "object",
+      "required": ["defaultLocale"],
+      "additionalProperties": false,
+      "properties": {
+        "defaultLocale": { "type": "string", "minLength": 2, "maxLength": 16 },
+        "locales": { "type": "array", "items": { "type": "string" }, "maxItems": 100 }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "required": { "type": "array", "items": { "type": "string" }, "maxItems": 100 } }
+    },
+    "extensions": { "type": "object" }
+  },
+  "$defs": {
+    "localizedText": {
+      "oneOf": [
+        { "type": "string", "maxLength": 4000 },
+        { "type": "object", "minProperties": 1, "additionalProperties": { "type": "string", "maxLength": 4000 } }
+      ]
+    },
+    "keyPath": { "type": "string", "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*(\\[\\])?(\\.[a-zA-Z_][a-zA-Z0-9_]*(\\[\\])?)*$", "maxLength": 512 },
+    "operationRef": { "type": "string", "pattern": "^(api|database|workflow|logic|storage|notification|test):[A-Za-z0-9._-]+$", "maxLength": 256 },
+    "expr": {
+      "type": "object",
+      "oneOf": [
+        { "required": ["const"], "additionalProperties": false, "properties": { "const": {} } },
+        {
+          "required": ["ref"], "additionalProperties": false,
+          "properties": { "ref": { "type": "string", "pattern": "^(field:[a-zA-Z_][a-zA-Z0-9_.*\\[\\]]*|context:[a-zA-Z_][a-zA-Z0-9_.]*|item:[a-zA-Z_][a-zA-Z0-9_.]*|parent:[a-zA-Z_][a-zA-Z0-9_.]*|index|source:[a-zA-Z_][a-zA-Z0-9_-]*)$", "maxLength": 512 } }
+        },
+        {
+          "required": ["op", "args"], "additionalProperties": false,
+          "properties": {
+            "op": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$", "maxLength": 64 },
+            "args": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/expr" } }
+          }
+        }
+      ]
+    },
+    "field": {
+      "type": "object",
+      "required": ["id", "type", "key"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$", "maxLength": 128 },
+        "type": { "type": "string", "pattern": "^[a-z][a-zA-Z0-9-]*$", "maxLength": 64 },
+        "key": { "$ref": "#/$defs/keyPath" },
+        "label": { "$ref": "#/$defs/localizedText" },
+        "description": { "$ref": "#/$defs/localizedText" },
+        "defaultValue": {},
+        "valueType": { "enum": ["string", "number", "integer", "boolean", "string[]", "number[]", "object", "object[]", "asset", "asset[]", "null"] },
+        "required": { "type": "boolean" },
+        "disabled": { "type": "boolean" },
+        "readonly": { "type": "boolean" },
+        "hidden": { "type": "boolean" },
+        "computed": { "type": "boolean" },
+        "options": {
+          "oneOf": [
+            {
+              "type": "array", "maxItems": 5000,
+              "items": {
+                "type": "object", "required": ["value", "label"], "additionalProperties": false,
+                "properties": {
+                  "value": { "type": ["string", "number", "boolean"] },
+                  "label": { "$ref": "#/$defs/localizedText" }
+                }
+              }
+            },
+            {
+              "type": "object", "required": ["sourceId"], "additionalProperties": false,
+              "properties": {
+                "sourceId": { "type": "string", "maxLength": 128 },
+                "valueKey": { "type": "string", "maxLength": 128 },
+                "labelKey": { "type": "string", "maxLength": 128 }
+              }
+            }
+          ]
+        },
+        "validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "minLength": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+            "maxLength": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+            "min": { "type": "number" },
+            "max": { "type": "number" },
+            "minItems": { "type": "integer", "minimum": 0, "maximum": 100000 },
+            "maxItems": { "type": "integer", "minimum": 0, "maximum": 100000 },
+            "pattern": { "type": "string", "maxLength": 1000 },
+            "format": { "enum": ["email", "url", "phone", "date", "time", "date-time", "uuid", "postal-code", "color", "barcode"] },
+            "precision": { "type": "integer", "minimum": 0, "maximum": 10 },
+            "accept": { "type": "array", "items": { "type": "string" }, "maxItems": 100 },
+            "maxSizeBytes": { "type": "integer", "minimum": 1, "maximum": 10737418240 },
+            "multiple": { "type": "boolean" },
+            "message": { "$ref": "#/$defs/localizedText" }
+          }
+        },
+        "ui": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "placeholder": { "$ref": "#/$defs/localizedText" },
+            "helpText": { "$ref": "#/$defs/localizedText" },
+            "widget": { "type": "string", "maxLength": 64 },
+            "width": { "enum": ["full", "half"] },
+            "rows": { "type": "integer", "minimum": 1, "maximum": 50 }
+          }
+        },
+        "accessibility": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "hint": { "$ref": "#/$defs/localizedText" },
+            "role": { "type": "string", "maxLength": 64 }
+          }
+        },
+        "extensions": { "type": "object" },
+        "children": { "type": "array", "maxItems": 200, "items": { "$ref": "#/$defs/field" } },
+        "minItems": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "maxItems": { "type": "integer", "minimum": 1, "maximum": 10000 }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "required": ["id", "when", "effects"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$", "maxLength": 128 },
+        "when": { "$ref": "#/$defs/expr" },
+        "effects": {
+          "type": "array", "minItems": 1, "maxItems": 200,
+          "items": {
+            "type": "object", "required": ["fieldId", "set"], "additionalProperties": false,
+            "properties": {
+              "fieldId": { "type": "string", "maxLength": 128 },
+              "set": {
+                "type": "object", "minProperties": 1, "additionalProperties": false,
+                "properties": {
+                  "visible": { "type": "boolean" },
+                  "required": { "type": "boolean" },
+                  "disabled": { "type": "boolean" },
+                  "readonly": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "formula": {
+      "type": "object",
+      "required": ["id", "target", "expr"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$", "maxLength": 128 },
+        "target": { "$ref": "#/$defs/keyPath" },
+        "expr": { "$ref": "#/$defs/expr" }
+      }
+    },
+    "crossFieldRule": {
+      "type": "object",
+      "required": ["id", "expr", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$", "maxLength": 128 },
+        "expr": { "$ref": "#/$defs/expr" },
+        "message": { "$ref": "#/$defs/localizedText" },
+        "path": { "$ref": "#/$defs/keyPath" },
+        "severity": { "enum": ["error", "warning"] }
+      }
+    },
+    "asyncRule": {
+      "type": "object",
+      "required": ["id", "path", "operationRef", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$", "maxLength": 128 },
+        "path": { "$ref": "#/$defs/keyPath" },
+        "operationRef": { "$ref": "#/$defs/operationRef" },
+        "inputMapping": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 512 } },
+        "debounceMs": { "type": "integer", "minimum": 0, "maximum": 60000 },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 120000 },
+        "message": { "$ref": "#/$defs/localizedText" }
+      }
+    },
+    "dataSource": {
+      "type": "object",
+      "required": ["id", "providerRef"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$", "maxLength": 128 },
+        "providerRef": { "$ref": "#/$defs/operationRef" },
+        "params": { "type": "object" },
+        "cache": {
+          "type": "object", "required": ["ttlMs"], "additionalProperties": false,
+          "properties": { "ttlMs": { "type": "integer", "minimum": 0, "maximum": 86400000 } }
+        }
+      }
+    },
+    "submission": {
+      "type": "object",
+      "required": ["operationRef"],
+      "additionalProperties": false,
+      "properties": {
+        "operationRef": { "$ref": "#/$defs/operationRef" },
+        "operationVersion": { "type": "string", "maxLength": 32 },
+        "inputMapping": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 512 } },
+        "includeHidden": { "type": "boolean" },
+        "idempotency": {
+          "type": "object", "required": ["strategy"], "additionalProperties": false,
+          "properties": {
+            "strategy": { "enum": ["auto", "stable"] },
+            "stableKeys": { "type": "array", "items": { "type": "string" }, "maxItems": 20 }
+          }
+        },
+        "offline": { "type": "object", "required": ["queue"], "additionalProperties": false, "properties": { "queue": { "type": "boolean" } } },
+        "onSuccess": {
+          "type": "array", "maxItems": 20,
+          "items": {
+            "type": "object", "required": ["operationRef"], "additionalProperties": false,
+            "properties": {
+              "operationRef": { "$ref": "#/$defs/operationRef" },
+              "inputMapping": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 512 } },
+              "condition": { "$ref": "#/$defs/expr" }
+            }
+          }
+        }
+      }
+    },
+    "layoutNode": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["section", "group", "row", "columns", "tabs", "tab", "accordion", "steps", "step", "fieldset", "summary", "repeater", "divider", "text"] },
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "$ref": "#/$defs/localizedText" },
+        "text": { "$ref": "#/$defs/localizedText" },
+        "fieldRefs": { "type": "array", "maxItems": 2000, "items": { "type": "string", "maxLength": 128 } },
+        "repeaterRef": { "type": "string", "maxLength": 128 },
+        "children": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/layoutNode" } }
+      }
+    }
+  }
+}
