@@ -298,6 +298,7 @@ export interface FormSnapshot {
   required: Record<string, boolean>;
   repeaterRows: Record<string, string[]>;   // repeater field id -> stable row ids
   dataSources: Record<string, DataSourceStatus>;
+  asyncValidation: Record<string, { status: 'idle' | 'pending' | 'validating' | 'error'; message?: string }>;
   submission: SubmissionStatus;
   draft: { status: 'none' | 'saving' | 'saved' | 'restored' | 'error' | 'conflict'; savedAt?: string; message?: string };
   diagnostics: Array<{ code: string; message: string; path?: string }>;

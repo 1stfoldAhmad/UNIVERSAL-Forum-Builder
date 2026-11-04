@@ -468,7 +468,13 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
       readonly: (d.readonly ?? false) || d.type === 'computed' || isFormulaTarget,
       hidden: d.hidden ?? false,
       computed: (d.computed ?? false) || isFormulaTarget,
-      validation: { ...contract.builtInValidation, ...d.validation },
+      validation: {
+        ...contract.builtInValidation,
+        ...d.validation,
+        ...(d.type === 'repeater'
+          ? { minItems: d.validation?.minItems ?? d.minItems, maxItems: d.validation?.maxItems ?? d.maxItems }
+          : {}),
+      },
       options: opts,
       optionSourceId: optSource?.sourceId,
       optionValueKey: optSource?.valueKey ?? 'value',
