@@ -36,112 +36,128 @@ public struct VdsFormView: View {
         }.onAppear { c.initialize() }
     }
 
-    @ViewBuilder private func layout(_ node: [String: Any]) -> some View {
+    // Recursive helpers erase to AnyView at recursion points to avoid opaque
+    // return-type cycles (Swift cannot infer `some View` defined in terms of itself).
+    private func layout(_ node: [String: Any]) -> AnyView {
         let type = node["type"] as? String ?? "section"
-        if type == "steps" { steps(node["children"] as? [[String: Any]] ?? []) }
-        else if type == "text" { Text(Validation.localize(node["text"], c.locale)) }
-        else if type == "divider" { Divider() }
-        else {
-            VStack(alignment: .leading, spacing: 10) {
-                if let t = node["title"] { Text(Validation.localize(t, c.locale)).font(.headline) }
-                ForEach(node["fieldRefs"] as? [String] ?? [], id: \.self) { fid in
-                    if let f = field(fid) { fieldView(f, f["key"] as! String) }
-                }
-                ForEach(Array((node["children"] as? [[String: Any]] ?? []).enumerated()), id: \.offset) { _, child in layout(child) }
-            }
+        if type == "steps" { return AnyView(steps(node["children"] as? [[String: Any]] ?? [])) }
+        if type == "text" { return AnyView(Text(Validation.localize(node["text"], c.locale))) }
+        if type == "divider" { return AnyView(Divider()) }
+        let kids = (node["children"] as? [[String: Any]] ?? []).map { AnyView(layout($0)) }
+        let refs = (node["fieldRefs"] as? [String] ?? []).compactMap { fid -> AnyView? in
+            guard let f = field(fid) else { return nil }
+            return AnyView(fieldView(f, f["key"] as! String))
         }
+        return AnyView(VStack(alignment: .leading, spacing: 10) {
+            if let t = node["title"] { Text(Validation.localize(t, c.locale)).font(.headline) }
+            ForEach(Array(refs.enumerated()), id: \.offset) { _, v in v }
+            ForEach(Array(kids.enumerated()), id: \.offset) { _, v in v }
+        })
     }
 
-    @ViewBuilder private func steps(_ steps: [[String: Any]]) -> some View {
+    private func steps(_ steps: [[String: Any]]) -> AnyView {
         let idx = min(max(c.stepIndex, 0), max(steps.count - 1, 0))
         let current = steps.isEmpty ? [:] : steps[idx]
-        VStack(alignment: .leading) {
+        let title = Validation.localize(current["title"], c.locale)
+        return AnyView(VStack(alignment: .leading) {
             ProgressView(value: steps.isEmpty ? 0.0 : Double(idx + 1) / Double(steps.count))
-            Text(Validation.localize(current["title"], c.locale).isEmpty ? "Step \(idx + 1)" : Validation.localize(current["title"], c.locale)).font(.headline)
+            Text(title.isEmpty ? "Step \(idx + 1)" : title).font(.headline)
             layout(current.merging(["type": "section" as Any]) { _, new in new })
             HStack {
                 Button("Back") { c.stepIndex -= 1 }.disabled(idx == 0).accessibilityIdentifier("vds-step-prev")
                 Spacer()
                 Button("Next") { c.stepIndex += 1 }.disabled(idx >= steps.count - 1).accessibilityIdentifier("vds-step-next")
             }
-        }
+        })
     }
 
     private func field(_ id: String) -> [String: Any]? {
         (c.ir["fields"] as? [[String: Any]] ?? []).first { $0["id"] as? String == id }
     }
 
-    @ViewBuilder private func fieldView(_ f: [String: Any], _ path: String) -> some View {
+    private func fieldView(_ f: [String: Any], _ path: String) -> AnyView {
         let id = f["id"] as! String
         let type = f["type"] as! String
-        if type == "hidden" || c.state.visibility[id] == false { EmptyView() }
-        else if type == "repeater" { repeater(f) }
-        else if type == "group" {
+        if type == "hidden" || c.state.visibility[id] == false { return AnyView(EmptyView()) }
+        if type == "repeater" { return AnyView(repeater(f)) }
+        if type == "group"] {
             let kids = (c.ir["fields"] as? [[String: Any]] ?? []).filter { $0["parentId"] as? String == id }
-            GroupBox(Validation.localize(f["label"], c.locale)) {
-                VStack(alignment: .leading) { ForEach(Array(kids.enumerated()), id: \.offset) { _, k in fieldView(k, k["key"] as! String) } }
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(Validation.localize(f["label"], c.locale) + (c.state.required[id] == true ? " *" : ""))
-                control(f, path)
-                ForEach(Array(c.errorsFor(path).enumerated()), id: \.offset) { _, e in
-                    Text(e["message"] as? String ?? "").font(.caption).foregroundColor(.red).accessibilityIdentifier("vds-error-\(path)")
+            return AnyView(GroupBox(Validation.localize(f["label"], c.locale)) {
+                VStack(alignment: .leading) {
+                    ForEach(Array(kids.enumerated()), id: \.offset) { _, k in AnyView(fieldView(k, k["key"] as! String)) }
                 }
-            }
+            })
         }
+        let errors = c.errorsFor(path).map { AnyView(Text($0["message"] as? String ?? "").font(.caption).foregroundColor(.red).accessibilityIdentifier("vds-error-\(path)")) }
+        let required = c.state.required[id] == true
+        return AnyView(VStack(alignment: .leading, spacing: 4) {
+            Text(Validation.localize(f["label"], c.locale) + (required ? " *" : ""))
+            control(f, path)
+            ForEach(Array(errors.enumerated()), id: \.offset) { _, v in v }
+        })
     }
 
-    @ViewBuilder private func repeater(_ f: [String: Any]) -> some View {
+    private func repeater(_ f: [String: Any]) -> AnyView {
         let id = f["id"] as! String
         let rows = c.repeaterRows[id] ?? []
         let kids = (c.ir["fields"] as? [[String: Any]] ?? []).filter { $0["parentId"] as? String == id }
-        GroupBox(Validation.localize(f["label"], c.locale)) {
+        let key = f["key"] as! String
+        return AnyView(GroupBox(Validation.localize(f["label"], c.locale)) {
             VStack(alignment: .leading) {
                 ForEach(Array(rows.enumerated()), id: \.element) { i, rowId in
                     VStack(alignment: .leading) {
                         ForEach(Array(kids.enumerated()), id: \.offset) { _, k in
-                            fieldView(k, (k["key"] as! String).replacingOccurrences(of: "\(f["key"] as! String)[]", with: "\(f["key"] as! String).\(i)"))
+                            AnyView(fieldView(k, (k["key"] as! String).replacingOccurrences(of: "\(key)[]", with: "\(key).\(i)")))
                         }
                         Button("Remove") { c.removeRepeaterItem(id, rowId) }.accessibilityIdentifier("vds-remove-\(rowId)")
                     }.padding(6)
                 }
                 Button("Add entry") { c.addRepeaterItem(id) }.accessibilityIdentifier("vds-add-row")
             }
-        }
+        })
     }
 
-    @ViewBuilder private func control(_ f: [String: Any], _ path: String) -> some View {
+    private func control(_ f: [String: Any], _ path: String) -> AnyView {
         let type = f["type"] as! String
+        let fid = f["id"] as! String
         let value = c.fieldValue(path)
-        let enabled = c.state.disabled[f["id"]] != true && c.state.readonly[f["id"]] != true && f["computed"] != true
+        let computed = (f["computed"] as? NSNumber)?.boolValue ?? false
+        let enabled = c.state.disabled[fid] != true && c.state.readonly[fid] != true && !computed
         let opts = f["options"] as? [[String: Any]] ?? []
         let validation = f["validation"] as? [String: Any] ?? [:]
         let text = Binding<String>(get: { value.map { "\($0)" } ?? "" }, set: { c.setFieldValue(path, $0) })
 
         switch type {
-        case "textarea": TextEditor(text: text).frame(minHeight: 80).disabled(!enabled).accessibilityIdentifier("vds-input-\(path)")
+        case "textarea":
+            return AnyView(TextEditor(text: text).frame(minHeight: 80).disabled(!enabled).accessibilityIdentifier("vds-input-\(path)"))
         case "select":
-            Picker("", selection: Binding<String>(get: { value.map { "\($0)" } ?? "" }, set: { c.setFieldValue(path, $0) })) {
+            let sel = Binding<String>(get: { value.map { "\($0)" } ?? "" }, set: { c.setFieldValue(path, $0) })
+            return AnyView(Picker("", selection: sel) {
                 ForEach(Array(opts.enumerated()), id: \.offset) { _, o in Text(Validation.localize(o["label"], c.locale)).tag("\(o["value"]!)") }
-            }.disabled(!enabled).accessibilityIdentifier("vds-input-\(path)")
+            }.disabled(!enabled).accessibilityIdentifier("vds-input-\(path)"))
         case "checkbox", "switch", "consent":
-            Toggle("", isOn: Binding<Bool>(get: { (value as? NSNumber)?.boolValue ?? false }, set: { c.setFieldValue(path, $0) })).disabled(!enabled).accessibilityIdentifier("vds-input-\(path)")
+            let on = Binding<Bool>(get: { (value as? NSNumber)?.boolValue ?? false }, set: { c.setFieldValue(path, $0) })
+            return AnyView(Toggle("", isOn: on).disabled(!enabled).accessibilityIdentifier("vds-input-\(path)"))
         case "rating":
-            let max = (validation["max"] as? NSNumber)?.intValue ?? 5
+            let max = max(1, (validation["max"] as? NSNumber)?.intValue ?? 5)
             let cur = (value as? NSNumber)?.intValue ?? 0
-            HStack { ForEach(1...max, id: \.self) { n in Button(n <= cur ? "★" : "☆") { c.setFieldValue(path, n) }.disabled(!enabled).accessibilityIdentifier("vds-star-\(path)-\(n)") } }
+            return AnyView(HStack { ForEach(1...max, id: \.self) { n in Button(n <= cur ? "★" : "☆") { c.setFieldValue(path, n) }.disabled(!enabled).accessibilityIdentifier("vds-star-\(path)-\(n)") } })
         case "range":
             let mn = (validation["min"] as? NSNumber)?.doubleValue ?? 0
             let mx = (validation["max"] as? NSNumber)?.doubleValue ?? 100
-            Slider(value: Binding<Double>(get: { (value as? NSNumber)?.doubleValue ?? mn }, set: { c.setFieldValue(path, $0) }), in: mn...mx).disabled(!enabled).accessibilityIdentifier("vds-input-\(path)")
-        case "computed": Text(value.map { "\($0)" } ?? "—").font(.headline).accessibilityIdentifier("vds-computed-\(path)")
-        case "file", "image": Button("Choose file (upload provider)") {}.disabled(!enabled).accessibilityIdentifier("vds-input-\(path)")
-        case "signature": Text("Signature capture is not supported by the SwiftUI renderer.")
+            let v = Binding<Double>(get: { (value as? NSNumber)?.doubleValue ?? mn }, set: { c.setFieldValue(path, $0) })
+            return AnyView(Slider(value: v, in: mn...mx).disabled(!enabled).accessibilityIdentifier("vds-input-\(path)"))
+        case "computed":
+            return AnyView(Text(value.map { "\($0)" } ?? "—").font(.headline).accessibilityIdentifier("vds-computed-\(path)"))
+        case "file", "image":
+            return AnyView(Button("Choose file (upload provider)") {}.disabled(!enabled).accessibilityIdentifier("vds-input-\(path)"))
+        case "signature":
+            return AnyView(Text("Signature capture is not supported by the SwiftUI renderer."))
         case "integer", "decimal", "currency", "percentage", "duration":
-            TextField("", text: Binding<String>(get: { value.map { "\($0)" } ?? "" }, set: { c.setFieldValue(path, type == "integer" ? (Int($0) ?? $0) : (Double($0) ?? $0)) })).disabled(!enabled).accessibilityIdentifier("vds-input-\(path)")
+            let num = Binding<String>(get: { value.map { "\($0)" } ?? "" }, set: { c.setFieldValue(path, type == "integer" ? (Int($0) ?? $0) : (Double($0) ?? $0)) })
+            return AnyView(TextField("", text: num).disabled(!enabled).accessibilityIdentifier("vds-input-\(path)"))
         default:
-            TextField("", text: text).disabled(!enabled).accessibilityIdentifier("vds-input-\(path)")
+            return AnyView(TextField("", text: text).disabled(!enabled).accessibilityIdentifier("vds-input-\(path)"))
         }
     }
 }
