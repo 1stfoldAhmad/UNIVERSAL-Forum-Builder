@@ -103,6 +103,9 @@ if (extension_loaded('pdo_sqlite')) {
     $r->eq('durable replay did not re-execute', [], $c2->getArrayCopy());
     unset($store2, $h2);
     @unlink($path);
+} elseif (getenv('VDS_REQUIRE_PDO_SQLITE') === '1') {
+    // CI sets this so the durable-restart check is guaranteed, never skipped.
+    $r->check('pdo_sqlite required (VDS_REQUIRE_PDO_SQLITE=1) but not loaded', false);
 } else {
     echo "note: pdo_sqlite not loaded; durable-restart check skipped.\n";
 }

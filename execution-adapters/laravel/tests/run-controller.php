@@ -132,6 +132,9 @@ if (class_exists(\Illuminate\Http\Request::class)) {
     $controller->submit($req, make_handler());
     $r->eq('real Illuminate request success', 200, $captured[0]);
     $r->eq('real Illuminate request body', 'succeeded', $captured[1]['status']);
+} elseif (getenv('VDS_REQUIRE_ILLUMINATE') === '1') {
+    // CI sets this so the real-Request integration is guaranteed, never skipped.
+    $r->check('illuminate/http required (VDS_REQUIRE_ILLUMINATE=1) but not loaded', false);
 } else {
     echo "note: illuminate/http not installed; real-Request integration check skipped (runs in CI).\n";
 }

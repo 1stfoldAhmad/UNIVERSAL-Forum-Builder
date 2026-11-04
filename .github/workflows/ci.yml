@@ -65,4 +65,7 @@ jobs:
       - name: Install Composer dev deps (illuminate/http for the real-Request integration check)
         run: cd execution-adapters/laravel && composer update --no-interaction --prefer-dist --no-progress
       - name: Run all PHP suites (expression + form conformance, idempotency parity, trusted handler, controller, security)
+        env:
+          VDS_REQUIRE_ILLUMINATE: '1'   # fail if the real-Request integration would be skipped
+          VDS_REQUIRE_PDO_SQLITE: '1'   # fail if the durable-restart check would be skipped
         run: cd execution-adapters/laravel && composer test

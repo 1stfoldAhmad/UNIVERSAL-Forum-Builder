@@ -37,7 +37,9 @@ for (const suite of suites) {
   const php = new PHP(await loadNodeRuntime('8.2', { emscriptenOptions: { processId: 1 } }));
   useHostFilesystem(php);
   try {
-    const res = await php.cli(['php', file], { cwd: here });
+    // Forward VDS_* flags (e.g. VDS_REQUIRE_ILLUMINATE) so local runs can mirror CI.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => k.startsWith('VDS_')));
+    const res = await php.cli(['php', file], { cwd: here, env });
     const [out, err, code] = await Promise.all([res.stdoutText, res.stderrText, res.exitCode]);
     if (out) process.stdout.write(out);
     if (err) process.stderr.write(err);
