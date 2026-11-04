@@ -249,7 +249,7 @@ export class FormController {
   setFieldValue(path: string, value: unknown, opts: { touch?: boolean } = {}): void {
     this.assertActive();
     const field = this.fieldForConcretePath(path);
-    if (field?.readonly || this.effective.readonly[field.id]) {
+    if (field && (field.readonly || this.effective.readonly[field.id])) {
       this.diagnostics.push({ code: 'READONLY_WRITE', message: `Field "${path}" is read-only; write ignored.`, path });
       this.notify();
       return;
@@ -475,11 +475,11 @@ export class FormController {
     this.notify();
     try {
       const res = await provider.query({ providerRef: def.providerRef, params, signal: controller.signal });
-      if (this.dsGen.get(sourceId) !== gen || this.state === 'disposed') return; // stale
+      if (this.dsGen.get(sourceId) !== gen || (this.state as FormState) === 'disposed') return; // stale
       this.dsCache.set(cacheKey, res, cacheKey, this.now().getTime());
       this.applySourceResponse(sourceId, res.items);
     } catch (e) {
-      if (this.dsGen.get(sourceId) !== gen || this.state === 'disposed') return;
+      if (this.dsGen.get(sourceId) !== gen || (this.state as FormState) === 'disposed') return;
       this.dsStatus[sourceId] = { status: 'error', error: { code: 'DATA_SOURCE_FETCH_FAILED', message: (e as Error).message } };
       this.notify();
     } finally {
@@ -757,7 +757,7 @@ export class FormController {
       }
       const resolved = await resolveExecutor(this.opts.executors, { operationRef: hook.operationRef });
       if ('error' in resolved) {
-        this.pushDiag('HOOK_EXECUTOR_MISSING', `onSuccess hook "${hook.operationRef}": ${resolved.error.message}`);
+        this.pushDiag('HOOK_EXECUTOR_MISSING', `onSuccess hook "${hook.operationRef}": ${'message' in resolved.error ? resolved.error.message : 'unknown'}`);
         continue;
       }
       const payload: Record<string, unknown> = {};

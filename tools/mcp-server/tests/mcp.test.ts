@@ -19,8 +19,8 @@ async function connect(grantedPermissions: string[]) {
   return client;
 }
 
-const parse = (result: { content: Array<{ type: string; text?: string }> }) =>
-  JSON.parse(result.content.find((c) => c.type === 'text')!.text!);
+const parse = (result: unknown) =>
+  JSON.parse(((result as { content: Array<{ type: string; text?: string }> }).content).find((c) => c.type === 'text')!.text!);
 
 describe('MCP server (permission-gated form tools)', () => {
   it('lists all six tools', async () => {

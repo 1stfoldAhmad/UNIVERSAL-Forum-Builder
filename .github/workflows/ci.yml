@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  typescript:
+    name: TypeScript core + renderers + tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Fetch + build vendored VDS logic engine
+        run: npm run setup:vds
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Run all Vitest projects (core / native / web / angular)
+        run: npx vitest run
+      - name: Cross-language conformance (CLI)
+        run: npx tsx tools/cli/src/bin.ts conformance
+      - name: Build live-preview example
+        run: cd examples/react-app && npx vite build
+      - name: Benchmarks (smoke)
+        run: npm run bench
+
+  django:
+    name: Django/Python trusted adapter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install TS deps (to generate shared IR fixtures)
+        run: npm ci --no-audit --no-fund
+      - name: Generate compiled IR fixtures from the TS compiler
+        run: npx tsx execution-adapters/django/scripts/gen_ir_fixtures.ts
+      - name: Install Python test deps
+        run: python3 -m pip install pytest django
+      - name: Run Django adapter tests (shared conformance + trusted handler + view)
+        run: cd execution-adapters/django && python3 -m pytest -q
+
+  laravel:
+    name: Laravel/PHP trusted adapter (shared conformance)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: Run PHP expression conformance against shared fixtures
+        run: cd execution-adapters/laravel && php tests/run-conformance.php

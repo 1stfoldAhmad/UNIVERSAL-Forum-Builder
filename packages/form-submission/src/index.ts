@@ -135,7 +135,7 @@ export async function replayOfflineQueue(
     if (rec.attempts >= (opts.maxAttempts ?? rec.maxAttempts)) continue;
     const resolved = await resolveExecutor(registry, { operationRef: rec.operationRef, operationVersion: rec.operationVersion });
     if ('error' in resolved) {
-      await update(rec.id, { status: 'failed', attempts: rec.attempts + 1, failure: { code: resolved.error.status === 'config-error' ? resolved.error.code : 'EXECUTION_ERROR', message: 'error' in resolved.error ? resolved.error.message : 'unknown' } });
+      await update(rec.id, { status: 'failed', attempts: rec.attempts + 1, failure: { code: resolved.error.status === 'config-error' ? resolved.error.code : 'EXECUTION_ERROR', message: 'message' in resolved.error ? resolved.error.message : 'unknown' } });
       failed.push(rec.id);
       continue;
     }

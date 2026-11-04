@@ -8,7 +8,8 @@
  * them against their own engines. This module runs them against the TS core
  * and reports per-case pass/fail with expected vs actual.
  */
-import { evaluate, deepEqual, type Expr, type EvalScope } from '@vds-form/expressions';
+import { evaluate, deepEqual, type EvalScope } from '@vds-form/expressions';
+import type { Expr } from '@vds-form/types';
 import { compileForm } from '@vds-form/compiler';
 import { computeEffectiveState, validateValues } from '@vds-form/validation';
 import { buildSubmissionPayload } from '@vds-form/submission';
@@ -68,7 +69,7 @@ export function runFormConformance(): CaseResult[] {
 
   for (const c of formFixtures.compilation as CompilationCase[]) {
     const r = compileForm(c.document);
-    const codes = r.ok ? [] : r.diagnostics.map((d) => d.code);
+    const codes: string[] = r.ok ? [] : r.diagnostics.map((d) => d.code);
     let passed = r.ok === c.expectOk;
     if (passed && c.codes) passed = c.codes.every((code) => codes.includes(code));
     results.push({ suite: 'compiler', id: c.id, passed, expected: { ok: c.expectOk, codes: c.codes ?? [] }, actual: { ok: r.ok, codes } });

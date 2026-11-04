@@ -154,7 +154,7 @@ export const OPERATORS: Record<string, OpImpl> = {
     if (isStr(v) && v.trim() !== '' && Number.isFinite(Number(v))) return okv(Number(v));
     return err('EXPR_TYPE_ERROR', 'toNumber cannot convert value.');
   },
-  toString: (args) => { const v = norm(args[0]); return okv(v === null ? '' : isStr(v) ? v : isNum(v) || isBool(v) ? String(v) : JSON.stringify(v)); },
+  toString: (args: unknown[]) => { const v = norm(args[0]); return okv(v === null ? '' : isStr(v) ? v : isNum(v) || isBool(v) ? String(v) : JSON.stringify(v)); },
   toBoolean: (args) => {
     const v = norm(args[0]);
     if (isBool(v)) return okv(v);
@@ -198,6 +198,6 @@ export const OPERATOR_ARITY: Record<string, [number, number]> = {
   lower: [1, 1], upper: [1, 1], trim: [1, 1],
   add: [0, -1], mul: [0, -1], sub: [1, -1], div: [2, 2], mod: [2, 2],
   abs: [1, 1], round: [1, 2], sum: [1, -1], avg: [1, -1], min: [1, -1], max: [1, -1], count: [1, 1],
-  toNumber: [1, 1], toString: [1, 1], toBoolean: [1, 1],
+  toNumber: [1, 1], toString: [1, 1] as [number, number], toBoolean: [1, 1],
   dateAddDays: [2, 2], dateDiffDays: [2, 2],
 };

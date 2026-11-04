@@ -3,7 +3,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import type { FormController } from '@vds-form/runtime';
-import type { FormSnapshot, LayoutNode, LocalizedText, NormalizedField, OptionItem, SubmissionResult, UploadedAssetRef } from '@vds-form/types';
+import type { FormSnapshot, LayoutNode, LocalizedText, NormalizedField, FieldOption, SubmissionResult, UploadedAssetRef } from '@vds-form/types';
 import { localize } from '@vds-form/validation';
 
 @Component({
@@ -247,7 +247,7 @@ export class UniversalFormComponent implements OnChanges, OnDestroy {
   childFields(parentId: string): NormalizedField[] { return this.controller.ir.fields.filter((f) => f.parentId === parentId); }
   repeaterRows(fieldId: string): string[] { return this.snap()?.repeaterRows[fieldId] ?? []; }
   rowPath(childKey: string, repeaterKey: string, idx: number): string { return childKey.replace(`${repeaterKey}[]`, `${repeaterKey}.${idx}`); }
-  options(fieldId: string): OptionItem[] { return this.controller.getOptions(fieldId); }
+  options(fieldId: string): FieldOption[] { return this.controller.getOptions(fieldId); }
 
   visible(f: NormalizedField): boolean { return this.snap()?.visibility[f.id] !== false && f.type !== 'hidden'; }
   value(path: string): unknown { return this.controller.getFieldValue(path); }

@@ -84,11 +84,17 @@ function keyboardTypeFor(type: string): KeyboardTypeOptions {
 export function TextField(props: FieldProps) {
   const { controller, field, path } = props;
   const slice = useField(controller, path);
-  const ref = React.useRef<TextInput>(null);
+  const ref = React.useRef<React.ComponentRef<typeof TextInput>>(null);
   React.useEffect(() => {
     props.registerFocus?.(path, () => ref.current?.focus());
   }, [path, props.registerFocus]);
   const multiline = field.type === 'textarea';
+  // RN's runtime supports accessibilityDescribedBy, but RN 0.88's generated
+  // typings omit it. A typed index-signature spread keeps the real a11y linkage
+  // without resorting to `any`.
+  const describedByProps: Record<string, string> = {
+    accessibilityDescribedBy: slice.issues.length ? `error-${path}` : `help-${path}`,
+  };
   return (
     <FieldShell {...props}>
       <TextInput
@@ -108,9 +114,9 @@ export function TextField(props: FieldProps) {
         placeholder={field.ui.placeholder ? localize(field.ui.placeholder, props.locale) : undefined}
         accessibilityLabel={localize(field.label, props.locale)}
         accessibilityHint={field.accessibility.hint ? localize(field.accessibility.hint, props.locale) : undefined}
-        accessibilityState={{ disabled: slice.disabled, required: slice.required }}
+        accessibilityState={{ disabled: slice.disabled, selected: slice.required }}
         accessibilityLabelledBy={`label-${path}`}
-        accessibilityDescribedBy={slice.issues.length ? `error-${path}` : `help-${path}`}
+        {...describedByProps}
         testID={`input-${path}`}
       />
     </FieldShell>

@@ -20,7 +20,7 @@ export { SubmissionExecutorRegistry, buildSubmissionPayload, makeIdempotencyKey,
 export { DataSourceProviderRegistry, DataSourceCache, evaluateParams, mapOptions } from '@vds-form/data-sources';
 export { MemoryDraftStorage, MemoryOfflineQueue, draftScopeKey, loadDraftChecked, makeDraftEnvelope } from '@vds-form/persistence';
 
-export interface CreateFormOptions extends RuntimeOptions, CompileOptions {
+export interface CreateFormOptions extends Omit<RuntimeOptions, 'ir'>, CompileOptions {
   document: FormDocument | string | unknown;
 }
 
