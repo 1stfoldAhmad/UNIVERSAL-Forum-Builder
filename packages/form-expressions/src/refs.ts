@@ -33,14 +33,17 @@ export function isOpExpr(e: Expr): e is { op: string; args: Expr[] } { return 'o
 
 /** Count nodes and max depth; used for budget enforcement before evaluation. */
 export function measureExpr(expr: Expr): { nodes: number; depth: number } {
+  // Iterative traversal (explicit stack) so a pathologically deep AST cannot
+  // overflow the call stack before the budget check rejects it.
   let nodes = 0;
   let maxDepth = 0;
-  const walk = (e: Expr, d: number) => {
+  const stack: Array<{ e: Expr; d: number }> = [{ e: expr, d: 1 }];
+  while (stack.length) {
+    const { e, d } = stack.pop()!;
     nodes += 1;
     if (d > maxDepth) maxDepth = d;
-    if (isOpExpr(e)) for (const a of e.args) walk(a, d + 1);
-  };
-  walk(expr, 1);
+    if (isOpExpr(e)) for (const a of e.args) stack.push({ e: a, d: d + 1 });
+  }
   return { nodes, depth: maxDepth };
 }
 

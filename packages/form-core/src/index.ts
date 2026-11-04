@@ -14,7 +14,7 @@ export {
   getPath, setIn, deleteIn, deepEqual, OPERATORS, OPERATOR_NAMES, DEFAULT_LIMITS,
 } from '@vds-form/expressions';
 export { defaultFieldRegistry, createDefaultFieldRegistry, FieldRegistry, BUILTIN_FIELD_CONTRACTS, type FieldContract } from '@vds-form/fields';
-export { validateValues, AsyncValidator, localize, isEmptyValue, isSafePattern, expandFieldInstances, type EffectiveFieldState } from '@vds-form/validation';
+export { validateValues, computeEffectiveState, AsyncValidator, localize, isEmptyValue, isSafePattern, expandFieldInstances, type EffectiveFieldState } from '@vds-form/validation';
 export { FormController, createFormController, type RuntimeOptions, type FormListener } from '@vds-form/runtime';
 export { SubmissionExecutorRegistry, buildSubmissionPayload, makeIdempotencyKey, replayOfflineQueue, resolveExecutor, configError } from '@vds-form/submission';
 export { DataSourceProviderRegistry, DataSourceCache, evaluateParams, mapOptions } from '@vds-form/data-sources';
