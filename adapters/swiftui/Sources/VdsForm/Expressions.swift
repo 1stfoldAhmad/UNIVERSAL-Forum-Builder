@@ -69,8 +69,12 @@ public enum Expressions {
         return (kind, path)
     }
 
+    /// null (NSNull) and undefined (nil) are equivalent, matching the JS engine.
+    public static func isNullish(_ v: Any?) -> Bool { return v == nil || v is NSNull }
+
     public static func deepEqual(_ a: Any?, _ b: Any?) -> Bool {
-        if a == nil || b == nil { return a == nil && b == nil }
+        let an = isNullish(a), bn = isNullish(b)
+        if an || bn { return an && bn }
         if isBool(a) || isBool(b) { return isBool(a) && isBool(b) && (a as! NSNumber).boolValue == (b as! NSNumber).boolValue }
         if isNum(a) && isNum(b) { return (a as! NSNumber).doubleValue == (b as! NSNumber).doubleValue }
         if isStr(a) && isStr(b) { return (a as! String) == (b as! String) }
@@ -123,8 +127,8 @@ public enum Expressions {
         let list: [Any?] = (args.count == 1 && args[0] is [Any]) ? (args[0] as! [Any]).map { $0 as Any? } : args
         var out: [Double] = []
         for v in list {
-            if v == nil && skipNull { continue }
-            guard isNum(v) else { return .err("EXPR_TYPE_ERROR", "Arithmetic expects finite numbers, got \(v == nil ? "null" : "\(type(of: v!))").") }
+            if isNullish(v) && skipNull { continue }
+            guard isNum(v) else { return .err("EXPR_TYPE_ERROR", "Arithmetic expects finite numbers, got \(isNullish(v) ? "null" : "\(type(of: v!))").") }
             out.append((v as! NSNumber).doubleValue)
         }
         return .ok(out)
@@ -154,7 +158,7 @@ public enum Expressions {
         case "or": return a.allSatisfy { isBool($0) } ? .ok(NSNumber(value: a.contains { ($0 as? NSNumber)?.boolValue == true })) : .err("EXPR_TYPE_ERROR", "or expects booleans.")
         case "not": return isBool(a[0]) ? .ok(NSNumber(value: !((a[0] as! NSNumber).boolValue))) : .err("EXPR_TYPE_ERROR", "not expects a boolean.")
         case "if": return isBool(a[0]) ? .ok((a[0] as! NSNumber).boolValue ? a[1] : a[2]) : .err("EXPR_TYPE_ERROR", "if expects a boolean condition.")
-        case "coalesce": return .ok(a.first { $0 != nil } ?? nil)
+        case "coalesce": return .ok(a.first { !isNullish($0) } ?? nil)
         case "eq": return .ok(NSNumber(value: deepEqual(a[0], a[1])))
         case "neq": return .ok(NSNumber(value: !deepEqual(a[0], a[1])))
         case "gt", "gte", "lt", "lte":
@@ -321,7 +325,7 @@ public enum Expressions {
                 return .ok(NSNumber(value: op == "and"))
             }
             if op == "if" { let c = evalNode(argsAst[0], d + 1); guard case .ok(let v) = c else { return c }; if !isBool(v) { return .err("EXPR_TYPE_ERROR", "if expects a boolean condition.") }; return evalNode((v as! NSNumber).boolValue ? argsAst[1] : argsAst[2], d + 1) }
-            if op == "coalesce" { for a in argsAst { let r = evalNode(a, d + 1); guard case .ok(let v) = r else { return r }; if v != nil { return .ok(v) } }; return .ok(nil) }
+            if op == "coalesce" { for a in argsAst { let r = evalNode(a, d + 1); guard case .ok(let v) = r else { return r }; if !isNullish(v) { return .ok(v) } }; return .ok(nil) }
             var args: [Any?] = []
             for a in argsAst { let r = evalNode(a, d + 1); guard case .ok(let v) = r else { return r }; args.append(v) }
             return apply(op, args, limits)
