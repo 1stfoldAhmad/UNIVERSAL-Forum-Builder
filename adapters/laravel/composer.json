@@ -1,0 +1,36 @@
+{
+    "name": "vds/form-laravel-renderer",
+    "description": "VDS Universal Form Builder — Laravel 13 server-rendered form renderer (shared HTML contract + trusted submission).",
+    "type": "library",
+    "license": "Apache-2.0",
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "repositories": [
+        { "type": "path", "url": "../../execution-adapters/laravel", "options": { "symlink": true } }
+    ],
+    "require": {
+        "php": ">=8.1",
+        "vds/form-laravel": "*"
+    },
+    "require-dev": {
+        "laravel/framework": "^13.0"
+    },
+    "suggest": {
+        "laravel/framework": "Required for the ServiceProvider/Blade/controller integration in a host Laravel 13 app (PHP ^8.3)."
+    },
+    "autoload": {
+        "psr-4": {
+            "VdsForm\\Renderer\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "VdsForm\\Renderer\\VdsFormRendererServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "test": "php tests/run-renderer.php"
+    }
+}

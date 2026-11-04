@@ -56,6 +56,8 @@ jobs:
         run: python3 -m pip install pytest django
       - name: Run Django adapter tests (shared conformance + trusted handler + view)
         run: cd execution-adapters/django && python3 -m pytest -q
+      - name: Run Django renderer tests (SSR + trusted view)
+        run: cd adapters/django && python3 -m pytest -q
 
   laravel:
     name: Laravel/PHP trusted adapter (full verification)
@@ -75,3 +77,92 @@ jobs:
           VDS_REQUIRE_ILLUMINATE: '1'   # fail if the real-Request integration would be skipped
           VDS_REQUIRE_PDO_SQLITE: '1'   # fail if the durable-restart check would be skipped
         run: cd execution-adapters/laravel && composer test
+      - name: Run Laravel renderer suite (framework-free, real PHP)
+        run: php adapters/laravel/tests/run-renderer.php
+
+  laravel13:
+    name: Laravel 13 renderer integration (real PHP 8.3 + Illuminate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo_sqlite, ctype, filter, hash, openssl, session, tokenizer
+          coverage: none
+          tools: composer:v2
+      - name: Install Laravel 13 + path-linked execution adapter
+        run: cd adapters/laravel && composer update --no-interaction --prefer-dist --no-progress
+      - name: Run real Laravel 13 integration check
+        run: |
+          cd adapters/laravel
+          set +e
+          php tests/run-laravel13.php > /tmp/l13.log 2>&1
+          code=$?
+          cat /tmp/l13.log
+          if [ $code -ne 0 ]; then grep -E 'Fatal|Error|FAIL|Uncaught' /tmp/l13.log | head -30 | sed 's/^/::error::/'; fi
+          exit $code
+
+  flutter:
+    name: Flutter renderer (Dart conformance + controller + widgets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Flutter test (62-case expression conformance + controller + widget)
+        run: cd adapters/flutter && flutter test
+
+  compose:
+    name: Compose renderer (Kotlin conformance + controller + UI compile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Set up Android SDK (preinstalled on the runner)
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" >/dev/null
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Core tests (62-case expression conformance + controller)
+        run: |
+          cd adapters/compose
+          set +e
+          gradle :core:test --no-daemon --console=plain > /tmp/core.log 2>&1
+          code=$?
+          tail -80 /tmp/core.log
+          if [ $code -ne 0 ]; then grep -E '^e: |error:|FAILURE|What went wrong|Execution failed|Caused by|Could not|FAILED|Unresolved|not found|Exception' /tmp/core.log | head -45 | sed 's/^/::error::/'; fi
+          exit $code
+      - name: Compose UI compile evidence
+        run: |
+          cd adapters/compose
+          set +e
+          gradle :ui:compileDebugKotlin --no-daemon --console=plain > /tmp/ui.log 2>&1
+          code=$?
+          tail -80 /tmp/ui.log
+          if [ $code -ne 0 ]; then grep -E '^e: |error:|FAILURE|What went wrong|Execution failed|Caused by|Could not|FAILED|Unresolved|not found|Exception' /tmp/ui.log | head -45 | sed 's/^/::error::/'; fi
+          exit $code
+
+  swiftui:
+    name: SwiftUI renderer (Swift conformance + controller + UI build)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Swift test (62-case expression conformance + controller; builds VdsFormUI)
+        run: |
+          cd adapters/swiftui
+          set +e
+          swift test > /tmp/swift.log 2>&1
+          code=$?
+          tail -80 /tmp/swift.log
+          if [ $code -ne 0 ]; then grep -E 'error:|failed|XCTAssert|Fatal' /tmp/swift.log | head -45 | sed 's/^/::error::/'; fi
+          exit $code

@@ -1,0 +1,18 @@
+/// Renderer capability manifest for the Flutter target (shared contract).
+library;
+
+const List<String> supportedFieldTypes = [
+  'text', 'textarea', 'email', 'password', 'url', 'phone', 'integer', 'decimal',
+  'currency', 'percentage', 'duration', 'date', 'time', 'datetime', 'select',
+  'multiselect', 'radio', 'checkbox', 'switch', 'consent', 'rating', 'range',
+  'color', 'file', 'image', 'computed', 'hidden', 'group', 'repeater', 'barcode',
+];
+
+const Map<String, dynamic> flutterCapabilityManifest = {
+  'target': 'flutter',
+  'contractVersion': '1.0.0',
+  'features': {
+    'dragDrop': false, 'filePicker': true, 'camera': true, 'offlineQueue': true,
+    'draftPersistence': true, 'multiStep': true, 'repeaters': true, 'richText': false, 'signature': false,
+  },
+};
