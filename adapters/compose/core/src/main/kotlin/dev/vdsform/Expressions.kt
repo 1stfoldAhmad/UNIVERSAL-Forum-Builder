@@ -143,7 +143,8 @@ object Expressions {
         "toNumber" to (1 to 1), "toString" to (1 to 1), "toBoolean" to (1 to 1), "dateAddDays" to (2 to 2), "dateDiffDays" to (2 to 2),
     )
 
-    private fun apply(op: String, a: List<Any?>, limits: Map<String, Int>): ExprResult = when (op) {
+    private fun apply(op: String, a: List<Any?>, limits: Map<String, Int>): ExprResult {
+        return when (op) {
         "and" -> if (a.all { isBool(it) }) ok(a.all { it == true }) else err("EXPR_TYPE_ERROR", "and expects booleans.")
         "or" -> if (a.all { isBool(it) }) ok(a.any { it == true }) else err("EXPR_TYPE_ERROR", "or expects booleans.")
         "not" -> if (isBool(a[0])) ok(!(a[0] as Boolean)) else err("EXPR_TYPE_ERROR", "not expects a boolean.")
@@ -205,8 +206,12 @@ object Expressions {
         "round" -> {
             if (!isNum(a[0])) return err("EXPR_TYPE_ERROR", "round expects a number.")
             val d = if (a.size > 1) a[1] else 0
-            if (!isNum(d) || (d as Number).toDouble() != Math.floor(d.toDouble()) || d.toDouble() < 0 || d.toDouble() > 10) err("EXPR_TYPE_ERROR", "round digits must be integer 0..10.")
-            else ok(roundHalfAway((a[0] as Number).toDouble(), d.toInt()))
+            if (!isNum(d)) err("EXPR_TYPE_ERROR", "round digits must be integer 0..10.")
+            else {
+                val dn = (d as Number).toDouble()
+                if (dn != Math.floor(dn) || dn < 0 || dn > 10) err("EXPR_TYPE_ERROR", "round digits must be integer 0..10.")
+                else ok(roundHalfAway((a[0] as Number).toDouble(), dn.toInt()))
+            }
         }
         "sum" -> reduce(a, 0.0, skipNull = true) { x, y -> x + y }
         "avg" -> { val n = numbers(a, true); if (n !is ExprResult.Ok) return n; val vals = n.value as List<*>; if (vals.isEmpty()) ok(null) else finite(vals.sumOf { it as Double } / vals.size) }
@@ -223,11 +228,12 @@ object Expressions {
         }
         "dateAddDays" -> {
             val t = isoDate(a[0])
-            if (t == null || !isNum(a[1]) || (a[1] as Number).toDouble() != Math.floor(a[1].toDouble())) err("EXPR_TYPE_ERROR", "dateAddDays expects (ISO date, integer days).")
+            if (t == null || !isNum(a[1]) || (a[1] as Number).toDouble() != Math.floor((a[1] as Number).toDouble())) err("EXPR_TYPE_ERROR", "dateAddDays expects (ISO date, integer days).")
             else { val d = java.time.Instant.ofEpochMilli(t + (a[1] as Number).toLong() * 86400000L).atZone(java.time.ZoneOffset.UTC).toLocalDate(); ok(String.format("%04d-%02d-%02d", d.year, d.monthValue, d.dayOfMonth)) }
         }
         "dateDiffDays" -> { val x = isoDate(a[0]); val y = isoDate(a[1]); if (x == null || y == null) err("EXPR_TYPE_ERROR", "dateDiffDays expects ISO dates.") else ok(Math.round((x - y) / 86400000.0)) }
         else -> err("EXPR_UNKNOWN_OPERATOR", "Unknown operator \"$op\".")
+        }
     }
 
     private fun resolveRef(ref: String, scope: Map<String, Any?>, limits: Map<String, Int>): ExprResult {

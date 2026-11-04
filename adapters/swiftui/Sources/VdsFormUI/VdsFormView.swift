@@ -80,7 +80,7 @@ public struct VdsFormView: View {
         let type = f["type"] as! String
         if type == "hidden" || c.state.visibility[id] == false { return AnyView(EmptyView()) }
         if type == "repeater" { return AnyView(repeater(f)) }
-        if type == "group"] {
+        if type == "group" {
             let kids = (c.ir["fields"] as? [[String: Any]] ?? []).filter { $0["parentId"] as? String == id }
             return AnyView(GroupBox(Validation.localize(f["label"], c.locale)) {
                 VStack(alignment: .leading) {

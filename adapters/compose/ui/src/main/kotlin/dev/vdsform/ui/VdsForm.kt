@@ -132,11 +132,13 @@ private fun Repeater(c: FormController, f: Map<String, Any?>) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun Control(c: FormController, f: Map<String, Any?>, path: String) {
     val type = f["type"] as String
+    val fid = f["id"] as String
     val value = c.fieldValue(path)
-    val enabled = c.state.disabled[f["id"]] != true && c.state.readonly[f["id"]] != true && f["computed"] != true
+    val enabled = c.state.disabled[fid] != true && c.state.readonly[fid] != true && f["computed"] != true
     @Suppress("UNCHECKED_CAST")
     val opts = (f["options"] as? List<Map<String, Any?>> ?: emptyList())
     val validation = (f["validation"] as? Map<*, *>) ?: emptyMap<String, Any?>()
@@ -167,7 +169,7 @@ private fun Control(c: FormController, f: Map<String, Any?>, path: String) {
         "computed" -> Text(value?.toString() ?: "—", modifier = Modifier.testTag("vds-computed-$path"), style = MaterialTheme.typography.titleMedium)
         "file", "image" -> OutlinedButton(onClick = {}, enabled = enabled, modifier = Modifier.testTag("vds-input-$path")) { Text("Choose file (upload provider)") }
         "signature" -> Text("Signature capture is not supported by the Compose renderer.")
-        "integer", "decimal", "currency", "percentage", "duration" -> OutlinedTextField(value = value?.toString() ?: "", onValueChange = { c.setFieldValue(path, it.ifEmpty { null } ?: (if (type == "integer") it.toLongOrNull() else it.toDoubleOrNull()) ?: it) }, enabled = enabled, modifier = Modifier.testTag("vds-input-$path"))
+        "integer", "decimal", "currency", "percentage", "duration" -> OutlinedTextField(value = value?.toString() ?: "", onValueChange = { s -> val v = if (s.isEmpty()) null else (if (type == "integer") s.toLongOrNull() else s.toDoubleOrNull()) ?: s; c.setFieldValue(path, v) }, enabled = enabled, modifier = Modifier.testTag("vds-input-$path"))
         else -> OutlinedTextField(value = value?.toString() ?: "", onValueChange = { c.setFieldValue(path, it) }, enabled = enabled, modifier = Modifier.testTag("vds-input-$path"))
     }
 }
