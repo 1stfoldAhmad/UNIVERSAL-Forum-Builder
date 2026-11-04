@@ -227,6 +227,38 @@ export function validateValues(
   return { valid: !issues.some((i) => i.severity === 'error'), issues };
 }
 
+/**
+ * Compute effective field state (visibility/required/disabled/readonly) from
+ * base declarations + conditions. Shared by the headless runtime AND trusted
+ * server adapters so client and server enforce identical semantics.
+ */
+export function computeEffectiveState(
+  ir: FormIR, values: Record<string, unknown>,
+  context?: Record<string, unknown>, sources?: Record<string, unknown>,
+): { state: EffectiveFieldState; errors: Array<{ id: string; message: string }> } {
+  const state: EffectiveFieldState = { visibility: {}, required: {}, disabled: {}, readonly: {} };
+  for (const f of ir.fields) {
+    state.visibility[f.id] = !f.hidden;
+    state.required[f.id] = f.required;
+    state.disabled[f.id] = f.disabled;
+    state.readonly[f.id] = f.readonly;
+  }
+  const errors: Array<{ id: string; message: string }> = [];
+  for (const c of ir.conditions) {
+    const r = evaluateBoolean(c.when, { values, context, sources });
+    if (!r.ok) { errors.push({ id: c.id, message: r.message }); continue; }
+    if (r.value === true) {
+      for (const eff of c.effects) {
+        if (eff.set.visible !== undefined) state.visibility[eff.fieldId] = eff.set.visible;
+        if (eff.set.required !== undefined) state.required[eff.fieldId] = eff.set.required;
+        if (eff.set.disabled !== undefined) state.disabled[eff.fieldId] = eff.set.disabled;
+        if (eff.set.readonly !== undefined) state.readonly[eff.fieldId] = eff.set.readonly;
+      }
+    }
+  }
+  return { state, errors };
+}
+
 /* ------------------------------------------------------------------ */
 /* Async validation (registered operations only, cancel/stale-safe)    */
 /* ------------------------------------------------------------------ */

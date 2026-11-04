@@ -15,7 +15,7 @@ import {
 } from '@vds-form/expressions';
 import { defaultFieldRegistry, type FieldRegistry } from '@vds-form/fields';
 import {
-  AsyncValidator, expandFieldInstances, localize, validateValues,
+  AsyncValidator, computeEffectiveState, expandFieldInstances, localize, validateValues,
   type EffectiveFieldState,
 } from '@vds-form/validation';
 import {
@@ -343,32 +343,10 @@ export class FormController {
   }
 
   private recomputeEffective(): void {
-    const eff: EffectiveFieldState = { visibility: {}, required: {}, disabled: {}, readonly: {} };
-    for (const f of this.ir.fields) {
-      eff.visibility[f.id] = !f.hidden;
-      eff.required[f.id] = f.required;
-      eff.disabled[f.id] = f.disabled;
-      eff.readonly[f.id] = f.readonly;
-    }
-    const scope = { values: this.values, context: this.opts.context, sources: this.sourceValues() };
-    for (const c of this.ir.conditions) {
-      const r = evaluateBoolean(c.when, scope);
-      this.metrics.evaluations += 1;
-      if (!r.ok) {
-        this.pushDiag('CONDITION_EVAL_FAILED', `${c.id}: ${r.message}`);
-        continue;
-      }
-      if (r.value === true) {
-        for (const effItem of c.effects) {
-          const s = effItem.set;
-          if (s.visible !== undefined) eff.visibility[effItem.fieldId] = s.visible;
-          if (s.required !== undefined) eff.required[effItem.fieldId] = s.required;
-          if (s.disabled !== undefined) eff.disabled[effItem.fieldId] = s.disabled;
-          if (s.readonly !== undefined) eff.readonly[effItem.fieldId] = s.readonly;
-        }
-      }
-    }
-    this.effective = eff;
+    const { state, errors } = computeEffectiveState(this.ir, this.values, this.opts.context, this.sourceValues());
+    this.metrics.evaluations += this.ir.conditions.length;
+    for (const e of errors) this.pushDiag('CONDITION_EVAL_FAILED', `${e.id}: ${e.message}`);
+    this.effective = state;
   }
 
   private recomputeFormulas(dirty: Set<string>): void {
