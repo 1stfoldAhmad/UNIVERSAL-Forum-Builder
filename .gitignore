@@ -10,3 +10,6 @@ __pycache__/
 .DS_Store
 examples/react-app/dist/
 benchmarks/results/*.json.tmp
+.release/
+.build/
+tsconfig.build.tmp.json
