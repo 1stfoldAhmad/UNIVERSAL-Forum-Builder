@@ -1,0 +1,28 @@
+VDS Universal Form Builder
+Copyright 2026 1stfoldAhmad
+
+This product includes software developed as part of the VDS builder ecosystem
+(https://github.com/1stfoldAhmad), licensed under the Apache License, Version 2.0.
+
+Attribution (Apache-2.0 §4):
+
+1. Native-JSON-form-Builder (https://github.com/1stfoldAhmad/Native-JSON-form-Builder)
+   Copyright its contributors, Apache-2.0.
+   The universal standard and core were informed by concepts from this library:
+   wildcard collection paths (items.*.amount), repeater row scoping tokens
+   ($item / $parent / $index), expression evaluation budgets, draft envelope
+   versioning, submission lifecycle state machines, and the react-native-web
+   test-aliasing technique used by its CI. No source files were copied verbatim;
+   implementations here are independent clean implementations of the universal
+   vds.form standard. The original library is unmodified and remains a separate product.
+
+2. vds-json-logic / NATIVE-JSON-FLOW-LOGIC-Builder
+   (https://github.com/1stfoldAhmad/NATIVE-JSON-FLOW-LOGIC-Builder)
+   Copyright its contributors, Apache-2.0.
+   Used as an unmodified dependency (built from source via scripts/fetch-vds-deps.sh)
+   for the logic:/workflow: submission execution integration.
+
+3. expo-app-foundation / JSON-Native-AUTH-Navigation-Builder
+   (https://github.com/1stfoldAhmad/JSON-Native-AUTH-Navigation-Builder)
+   Copyright its contributors, Apache-2.0.
+   Auth context/provider contract shapes informed integrations/vds-contracts.

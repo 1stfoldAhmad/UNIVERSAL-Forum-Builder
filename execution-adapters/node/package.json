@@ -1,0 +1,18 @@
+{
+  "name": "@vds-form/execution-node",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@vds-form/core": "*",
+    "@vds-form/types": "*",
+    "@vds-form/compiler": "*",
+    "@vds-form/validation": "*",
+    "@vds-form/submission": "*",
+    "@vds-form/vds-contracts": "*"
+  }
+}

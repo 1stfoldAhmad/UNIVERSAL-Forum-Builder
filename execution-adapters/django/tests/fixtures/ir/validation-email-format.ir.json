@@ -1,0 +1,64 @@
+{
+  "irVersion": "1.0.0",
+  "specVersion": "1.0.0",
+  "compilerVersion": "1.0.0",
+  "formId": "em",
+  "formVersion": "1.0.0",
+  "fields": [
+    {
+      "id": "email",
+      "type": "email",
+      "key": "email",
+      "valueType": "string",
+      "label": "Email",
+      "required": false,
+      "disabled": false,
+      "readonly": false,
+      "hidden": false,
+      "computed": false,
+      "validation": {
+        "format": "email"
+      },
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "children": [],
+      "sourcePointer": "/fields/0"
+    }
+  ],
+  "layout": {
+    "type": "section",
+    "id": "root",
+    "fieldRefs": [
+      "email"
+    ]
+  },
+  "conditions": [],
+  "formulas": [],
+  "crossFieldRules": [],
+  "asyncRules": [],
+  "dataSources": [],
+  "submission": {
+    "operationRef": "test:save"
+  },
+  "persistence": {},
+  "security": {},
+  "localization": {
+    "defaultLocale": "en",
+    "locales": [
+      "en"
+    ]
+  },
+  "requiredCapabilities": [],
+  "dependencies": {
+    "edges": [],
+    "order": [
+      "f:email"
+    ]
+  },
+  "sourceMap": {
+    "f:email": "/fields/0"
+  },
+  "fingerprint": "ff4f214e"
+}

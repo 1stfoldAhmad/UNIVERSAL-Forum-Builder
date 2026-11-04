@@ -1,0 +1,12 @@
+node_modules/
+dist/
+vendor/
+coverage/
+*.log
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+.DS_Store
+examples/react-app/dist/
+benchmarks/results/*.json.tmp

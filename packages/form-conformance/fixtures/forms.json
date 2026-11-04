@@ -1,0 +1,80 @@
+{
+  "suite": "vds.form/1",
+  "specVersion": "1.0.0",
+  "description": "Cross-language compiler/validation/payload conformance. Documents are canonical vds.form 1.0.0. Each adapter must reproduce expectOk, diagnostic codes, validation issue codes/paths, and submission payloads exactly.",
+  "compilation": [
+    {
+      "id": "valid-minimal",
+      "document": { "format": "vds.form", "specVersion": "1.0.0", "id": "min", "metadata": { "name": "Min", "version": "1.0.0" }, "fields": [ { "id": "name", "type": "text", "key": "name", "label": "Name" } ], "submission": { "operationRef": "test:save" } },
+      "expectOk": true
+    },
+    {
+      "id": "duplicate-key",
+      "document": { "format": "vds.form", "specVersion": "1.0.0", "id": "dup", "metadata": { "name": "Dup", "version": "1.0.0" }, "fields": [ { "id": "a", "type": "text", "key": "name", "label": "A" }, { "id": "b", "type": "text", "key": "name", "label": "B" } ], "submission": { "operationRef": "test:save" } },
+      "expectOk": false,
+      "codes": ["FIELD_KEY_DUPLICATE"]
+    },
+    {
+      "id": "unknown-type",
+      "document": { "format": "vds.form", "specVersion": "1.0.0", "id": "unk", "metadata": { "name": "Unk", "version": "1.0.0" }, "fields": [ { "id": "a", "type": "bogus", "key": "a", "label": "A" } ], "submission": { "operationRef": "test:save" } },
+      "expectOk": false,
+      "codes": ["FIELD_TYPE_UNKNOWN"]
+    },
+    {
+      "id": "formula-cycle",
+      "document": { "format": "vds.form", "specVersion": "1.0.0", "id": "cyc", "metadata": { "name": "Cyc", "version": "1.0.0" }, "fields": [ { "id": "a", "type": "computed", "key": "a", "label": "A", "computed": true }, { "id": "b", "type": "computed", "key": "b", "label": "B", "computed": true } ], "logic": { "formulas": [ { "id": "fa", "target": "a", "expr": { "ref": "field:b" } }, { "id": "fb", "target": "b", "expr": { "ref": "field:a" } } ] }, "submission": { "operationRef": "test:save" } },
+      "expectOk": false,
+      "codes": ["DEPENDENCY_CYCLE_DETECTED"]
+    }
+  ],
+  "validation": [
+    {
+      "id": "required-empty",
+      "document": { "format": "vds.form", "specVersion": "1.0.0", "id": "req", "metadata": { "name": "Req", "version": "1.0.0" }, "fields": [ { "id": "name", "type": "text", "key": "name", "label": "Name", "required": true } ], "submission": { "operationRef": "test:save" } },
+      "values": {},
+      "phase": "submit",
+      "expectIssues": [ { "code": "REQUIRED", "path": "name" } ]
+    },
+    {
+      "id": "email-format",
+      "document": { "format": "vds.form", "specVersion": "1.0.0", "id": "em", "metadata": { "name": "Em", "version": "1.0.0" }, "fields": [ { "id": "email", "type": "email", "key": "email", "label": "Email" } ], "submission": { "operationRef": "test:save" } },
+      "values": { "email": "not-an-email" },
+      "phase": "submit",
+      "expectIssues": [ { "code": "FORMAT_INVALID", "path": "email" } ]
+    },
+    {
+      "id": "min-length",
+      "document": { "format": "vds.form", "specVersion": "1.0.0", "id": "ml", "metadata": { "name": "Ml", "version": "1.0.0" }, "fields": [ { "id": "name", "type": "text", "key": "name", "label": "Name", "validation": { "minLength": 2 } } ], "submission": { "operationRef": "test:save" } },
+      "values": { "name": "a" },
+      "phase": "submit",
+      "expectIssues": [ { "code": "MIN_LENGTH", "path": "name" } ]
+    },
+    {
+      "id": "valid-values",
+      "document": { "format": "vds.form", "specVersion": "1.0.0", "id": "ok", "metadata": { "name": "Ok", "version": "1.0.0" }, "fields": [ { "id": "name", "type": "text", "key": "name", "label": "Name", "required": true, "validation": { "minLength": 2 } } ], "submission": { "operationRef": "test:save" } },
+      "values": { "name": "Ada" },
+      "phase": "submit",
+      "expectIssues": []
+    }
+  ],
+  "payload": [
+    {
+      "id": "input-mapping",
+      "document": { "format": "vds.form", "specVersion": "1.0.0", "id": "map", "metadata": { "name": "Map", "version": "1.0.0" }, "fields": [ { "id": "name", "type": "text", "key": "name", "label": "Name" }, { "id": "email", "type": "email", "key": "email", "label": "Email" } ], "submission": { "operationRef": "test:save", "inputMapping": { "fullName": "name", "emailAddress": "email" } } },
+      "values": { "name": "Ada", "email": "a@b.com" },
+      "expectPayload": { "fullName": "Ada", "emailAddress": "a@b.com" }
+    },
+    {
+      "id": "hidden-stripped",
+      "document": { "format": "vds.form", "specVersion": "1.0.0", "id": "hid", "metadata": { "name": "Hid", "version": "1.0.0" }, "fields": [ { "id": "type", "type": "text", "key": "type", "label": "Type" }, { "id": "company", "type": "text", "key": "company", "label": "Company", "hidden": true } ], "logic": { "conditions": [ { "id": "showCompany", "when": { "op": "eq", "args": [ { "ref": "field:type" }, { "const": "business" } ] }, "effects": [ { "fieldId": "company", "set": { "visible": true } } ] } ] }, "submission": { "operationRef": "test:save" } },
+      "values": { "type": "individual", "company": "Acme" },
+      "expectPayload": { "type": "individual" }
+    },
+    {
+      "id": "hidden-shown-when-condition-true",
+      "document": { "format": "vds.form", "specVersion": "1.0.0", "id": "hid2", "metadata": { "name": "Hid2", "version": "1.0.0" }, "fields": [ { "id": "type", "type": "text", "key": "type", "label": "Type" }, { "id": "company", "type": "text", "key": "company", "label": "Company", "hidden": true } ], "logic": { "conditions": [ { "id": "showCompany", "when": { "op": "eq", "args": [ { "ref": "field:type" }, { "const": "business" } ] }, "effects": [ { "fieldId": "company", "set": { "visible": true } } ] } ] }, "submission": { "operationRef": "test:save" } },
+      "values": { "type": "business", "company": "Acme" },
+      "expectPayload": { "type": "business", "company": "Acme" }
+    }
+  ]
+}

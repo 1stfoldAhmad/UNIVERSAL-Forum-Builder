@@ -1,0 +1,310 @@
+{
+  "irVersion": "1.0.0",
+  "specVersion": "1.0.0",
+  "compilerVersion": "1.0.0",
+  "formId": "customer-registration",
+  "formVersion": "1.2.0",
+  "fields": [
+    {
+      "id": "customerType",
+      "type": "select",
+      "key": "customer.type",
+      "valueType": "string",
+      "label": {
+        "en": "Customer type",
+        "ur": "کسٹمر کی قسم"
+      },
+      "defaultValue": "individual",
+      "required": true,
+      "disabled": false,
+      "readonly": false,
+      "hidden": false,
+      "computed": false,
+      "validation": {},
+      "options": [
+        {
+          "value": "individual",
+          "label": "Individual"
+        },
+        {
+          "value": "business",
+          "label": "Business"
+        }
+      ],
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "children": [],
+      "sourcePointer": "/fields/0"
+    },
+    {
+      "id": "fullName",
+      "type": "text",
+      "key": "customer.name",
+      "valueType": "string",
+      "label": {
+        "en": "Full name",
+        "ur": "پورا نام"
+      },
+      "required": true,
+      "disabled": false,
+      "readonly": false,
+      "hidden": false,
+      "computed": false,
+      "validation": {
+        "minLength": 2,
+        "maxLength": 120
+      },
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "children": [],
+      "sourcePointer": "/fields/1"
+    },
+    {
+      "id": "companyName",
+      "type": "text",
+      "key": "customer.companyName",
+      "valueType": "string",
+      "label": "Company name",
+      "required": false,
+      "disabled": false,
+      "readonly": false,
+      "hidden": true,
+      "computed": false,
+      "validation": {
+        "maxLength": 160
+      },
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "children": [],
+      "sourcePointer": "/fields/2"
+    },
+    {
+      "id": "taxId",
+      "type": "text",
+      "key": "customer.taxId",
+      "valueType": "string",
+      "label": "Tax ID",
+      "required": false,
+      "disabled": false,
+      "readonly": false,
+      "hidden": true,
+      "computed": false,
+      "validation": {
+        "pattern": "^[A-Z0-9-]{6,20}$"
+      },
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "children": [],
+      "sourcePointer": "/fields/3"
+    },
+    {
+      "id": "email",
+      "type": "email",
+      "key": "customer.email",
+      "valueType": "string",
+      "label": "Email",
+      "required": true,
+      "disabled": false,
+      "readonly": false,
+      "hidden": false,
+      "computed": false,
+      "validation": {
+        "format": "email"
+      },
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "children": [],
+      "sourcePointer": "/fields/4"
+    },
+    {
+      "id": "age",
+      "type": "integer",
+      "key": "customer.age",
+      "valueType": "integer",
+      "label": "Age",
+      "required": false,
+      "disabled": false,
+      "readonly": false,
+      "hidden": false,
+      "computed": false,
+      "validation": {
+        "min": 0,
+        "max": 130
+      },
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "children": [],
+      "sourcePointer": "/fields/5"
+    },
+    {
+      "id": "consent",
+      "type": "consent",
+      "key": "customer.consent",
+      "valueType": "boolean",
+      "label": "I agree to the terms",
+      "defaultValue": false,
+      "required": true,
+      "disabled": false,
+      "readonly": false,
+      "hidden": false,
+      "computed": false,
+      "validation": {},
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "children": [],
+      "sourcePointer": "/fields/6"
+    }
+  ],
+  "layout": {
+    "type": "section",
+    "id": "root",
+    "fieldRefs": [
+      "customerType",
+      "fullName",
+      "companyName",
+      "taxId",
+      "email",
+      "age",
+      "consent"
+    ]
+  },
+  "conditions": [
+    {
+      "id": "businessFields",
+      "when": {
+        "op": "eq",
+        "args": [
+          {
+            "ref": "field:customer.type"
+          },
+          {
+            "const": "business"
+          }
+        ]
+      },
+      "effects": [
+        {
+          "fieldId": "companyName",
+          "set": {
+            "visible": true,
+            "required": true
+          }
+        },
+        {
+          "fieldId": "taxId",
+          "set": {
+            "visible": true
+          }
+        }
+      ],
+      "reads": [
+        {
+          "kind": "field",
+          "path": "customer.type"
+        }
+      ]
+    }
+  ],
+  "formulas": [],
+  "crossFieldRules": [],
+  "asyncRules": [
+    {
+      "id": "emailUnique",
+      "path": "customer.email",
+      "operationRef": "test:customer.emailUnique",
+      "debounceMs": 200,
+      "timeoutMs": 3000,
+      "message": "This email is already registered."
+    }
+  ],
+  "dataSources": [],
+  "submission": {
+    "operationRef": "test:customer.create",
+    "inputMapping": {
+      "name": "customer.name",
+      "email": "customer.email",
+      "type": "customer.type",
+      "companyName": "customer.companyName",
+      "taxId": "customer.taxId",
+      "age": "customer.age",
+      "consent": "customer.consent"
+    },
+    "idempotency": {
+      "strategy": "auto"
+    }
+  },
+  "persistence": {
+    "drafts": {
+      "enabled": true,
+      "scope": "user",
+      "ttlSeconds": 604800
+    }
+  },
+  "security": {
+    "submitPermissions": [
+      "customer:create"
+    ]
+  },
+  "localization": {
+    "defaultLocale": "en",
+    "locales": [
+      "en",
+      "ur"
+    ]
+  },
+  "requiredCapabilities": [],
+  "dependencies": {
+    "edges": [
+      {
+        "from": "f:customer.type",
+        "to": "c:businessFields",
+        "kind": "condition"
+      },
+      {
+        "from": "c:businessFields",
+        "to": "f:customer.companyName",
+        "kind": "condition"
+      },
+      {
+        "from": "c:businessFields",
+        "to": "f:customer.taxId",
+        "kind": "condition"
+      }
+    ],
+    "order": [
+      "f:customer.age",
+      "f:customer.consent",
+      "f:customer.email",
+      "f:customer.name",
+      "f:customer.type",
+      "c:businessFields",
+      "f:customer.companyName",
+      "f:customer.taxId"
+    ]
+  },
+  "sourceMap": {
+    "f:customer.type": "/fields/0",
+    "f:customer.name": "/fields/1",
+    "f:customer.companyName": "/fields/2",
+    "f:customer.taxId": "/fields/3",
+    "f:customer.email": "/fields/4",
+    "f:customer.age": "/fields/5",
+    "f:customer.consent": "/fields/6",
+    "c:businessFields": "/logic/conditions/0"
+  },
+  "fingerprint": "e4b72dde"
+}

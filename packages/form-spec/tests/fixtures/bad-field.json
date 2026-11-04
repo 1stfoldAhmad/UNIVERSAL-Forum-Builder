@@ -1,0 +1,195 @@
+{
+  "format": "vds.form",
+  "specVersion": "1.0.0",
+  "id": "invoice",
+  "metadata": {
+    "name": "Invoice",
+    "version": "1.0.0"
+  },
+  "fields": [
+    {
+      "id": "customerName",
+      "type": "text",
+      "label": "Customer",
+      "required": true
+    },
+    {
+      "id": "taxRate",
+      "type": "percentage",
+      "key": "taxRate",
+      "label": "Tax rate (%)",
+      "defaultValue": 15,
+      "validation": {
+        "min": 0,
+        "max": 100
+      }
+    },
+    {
+      "id": "items",
+      "type": "repeater",
+      "key": "items",
+      "label": "Line items",
+      "minItems": 1,
+      "maxItems": 50,
+      "children": [
+        {
+          "id": "description",
+          "type": "text",
+          "key": "items[].description",
+          "label": "Description",
+          "required": true
+        },
+        {
+          "id": "qty",
+          "type": "integer",
+          "key": "items[].qty",
+          "label": "Qty",
+          "defaultValue": 1,
+          "validation": {
+            "min": 1,
+            "max": 10000
+          }
+        },
+        {
+          "id": "price",
+          "type": "currency",
+          "key": "items[].price",
+          "label": "Unit price",
+          "defaultValue": 0,
+          "validation": {
+            "min": 0,
+            "precision": 2
+          }
+        },
+        {
+          "id": "lineTotal",
+          "type": "computed",
+          "key": "items[].lineTotal",
+          "label": "Line total",
+          "computed": true
+        }
+      ]
+    },
+    {
+      "id": "subtotal",
+      "type": "computed",
+      "key": "subtotal",
+      "label": "Subtotal",
+      "computed": true
+    },
+    {
+      "id": "taxAmount",
+      "type": "computed",
+      "key": "taxAmount",
+      "label": "Tax",
+      "computed": true
+    },
+    {
+      "id": "total",
+      "type": "computed",
+      "key": "total",
+      "label": "Total",
+      "computed": true
+    }
+  ],
+  "logic": {
+    "formulas": [
+      {
+        "id": "lineTotal",
+        "target": "items[].lineTotal",
+        "expr": {
+          "op": "mul",
+          "args": [
+            {
+              "ref": "item:qty"
+            },
+            {
+              "ref": "item:price"
+            }
+          ]
+        }
+      },
+      {
+        "id": "subtotal",
+        "target": "subtotal",
+        "expr": {
+          "op": "sum",
+          "args": [
+            {
+              "ref": "field:items.*.lineTotal"
+            }
+          ]
+        }
+      },
+      {
+        "id": "taxAmount",
+        "target": "taxAmount",
+        "expr": {
+          "op": "round",
+          "args": [
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "ref": "field:subtotal"
+                },
+                {
+                  "op": "div",
+                  "args": [
+                    {
+                      "ref": "field:taxRate"
+                    },
+                    {
+                      "const": 100
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "const": 2
+            }
+          ]
+        }
+      },
+      {
+        "id": "total",
+        "target": "total",
+        "expr": {
+          "op": "add",
+          "args": [
+            {
+              "ref": "field:subtotal"
+            },
+            {
+              "ref": "field:taxAmount"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "validation": {
+    "crossField": [
+      {
+        "id": "positiveTotal",
+        "expr": {
+          "op": "gt",
+          "args": [
+            {
+              "ref": "field:total"
+            },
+            {
+              "const": 0
+            }
+          ]
+        },
+        "message": "Invoice total must be greater than zero.",
+        "path": "total"
+      }
+    ]
+  },
+  "submission": {
+    "operationRef": "test:invoice.create"
+  }
+}

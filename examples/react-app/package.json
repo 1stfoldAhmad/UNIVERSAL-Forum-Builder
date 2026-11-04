@@ -1,0 +1,22 @@
+{
+  "name": "@vds-form/example-react",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@vds-form/react": "*",
+    "@vds-form/core": "*",
+    "@vds-form/vds-contracts": "*",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "private": true,
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "vite build"
+  }
+}

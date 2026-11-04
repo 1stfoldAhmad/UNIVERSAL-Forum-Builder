@@ -1,0 +1,123 @@
+{
+  "format": "vds.form",
+  "specVersion": "1.0.0",
+  "id": "purchase-approval",
+  "metadata": {
+    "name": "Purchase Approval",
+    "version": "1.0.0"
+  },
+  "fields": [
+    {
+      "id": "item",
+      "type": "text",
+      "key": "request.item",
+      "label": "Item",
+      "required": true
+    },
+    {
+      "id": "amount",
+      "type": "currency",
+      "key": "request.amount",
+      "label": "Amount",
+      "required": true,
+      "validation": {
+        "min": 0.01,
+        "precision": 2
+      }
+    },
+    {
+      "id": "justification",
+      "type": "textarea",
+      "key": "request.justification",
+      "label": "Justification",
+      "hidden": true,
+      "validation": {
+        "minLength": 20
+      }
+    },
+    {
+      "id": "department",
+      "type": "select",
+      "key": "request.department",
+      "label": "Department",
+      "required": true,
+      "options": [
+        {
+          "value": "eng",
+          "label": "Engineering"
+        },
+        {
+          "value": "ops",
+          "label": "Operations"
+        },
+        {
+          "value": "hr",
+          "label": "HR"
+        }
+      ]
+    }
+  ],
+  "logic": {
+    "conditions": [
+      {
+        "id": "highValue",
+        "when": {
+          "op": "gt",
+          "args": [
+            {
+              "ref": "field:request.amount"
+            },
+            {
+              "const": 1000
+            }
+          ]
+        },
+        "effects": [
+          {
+            "fieldId": "justification",
+            "set": {
+              "visible": true,
+              "required": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "security": {
+    "submitPermissions": [
+      "purchase:request"
+    ],
+    "fieldAccess": {
+      "request.amount": {
+        "write": [
+          "purchase:request"
+        ]
+      }
+    }
+  },
+  "submission": {
+    "operationRef": "test:purchase.create",
+    "onSuccess": [
+      {
+        "operationRef": "workflow:purchase.approval",
+        "inputMapping": {
+          "amount": "request.amount",
+          "department": "request.department",
+          "item": "request.item"
+        },
+        "condition": {
+          "op": "gt",
+          "args": [
+            {
+              "ref": "field:request.amount"
+            },
+            {
+              "const": 1000
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

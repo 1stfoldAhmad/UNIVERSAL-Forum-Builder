@@ -1,0 +1,22 @@
+{
+  "name": "@vds-form/example-expo",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@vds-form/expo": "*",
+    "@vds-form/core": "*",
+    "@vds-form/vds-contracts": "*",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "expo": "~58.0.21"
+  },
+  "private": true,
+  "scripts": {
+    "start": "expo start"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "format": "vds.form",
+  "specVersion": "1.0.0",
+  "id": "nested-profile",
+  "metadata": {
+    "name": "Nested Profile",
+    "version": "1.0.0"
+  },
+  "fields": [
+    {
+      "id": "profile",
+      "type": "group",
+      "key": "profile",
+      "label": "Profile",
+      "children": [
+        {
+          "id": "displayName",
+          "type": "text",
+          "key": "profile.displayName",
+          "label": "Display name",
+          "required": true
+        },
+        {
+          "id": "contact",
+          "type": "group",
+          "key": "profile.contact",
+          "label": "Contact",
+          "children": [
+            {
+              "id": "email",
+              "type": "email",
+              "key": "profile.contact.email",
+              "label": "Email",
+              "required": true
+            },
+            {
+              "id": "phone",
+              "type": "phone",
+              "key": "profile.contact.phone",
+              "label": "Phone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tags",
+      "type": "multiselect",
+      "key": "tags",
+      "label": "Interests",
+      "options": [
+        {
+          "value": "a",
+          "label": "Alpha"
+        },
+        {
+          "value": "b",
+          "label": "Beta"
+        },
+        {
+          "value": "c",
+          "label": "Gamma"
+        }
+      ],
+      "validation": {
+        "minItems": 1,
+        "maxItems": 2
+      }
+    }
+  ],
+  "submission": {
+    "operationRef": "test:profile.save"
+  }
+}

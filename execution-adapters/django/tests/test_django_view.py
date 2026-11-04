@@ -1,0 +1,74 @@
+"""Django HTTP view integration test. Skips if Django is not installed (the
+framework-free core tests never require it)."""
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+import pytest
+
+django = pytest.importorskip("django")
+from django.conf import settings
+
+if not settings.configured:
+    settings.configure(DEBUG=True, ALLOWED_HOSTS=["*"], SECRET_KEY="test", ROOT_URLCONF=__name__)
+    django.setup()
+
+from django.test import RequestFactory
+
+from vds_form.django_view import create_submission_view
+from vds_form.submission import TrustedSubmissionHandler, OperationRegistry, SimpleRbacEvaluator
+
+HERE = os.path.dirname(__file__)
+VALID = {"name": "Ada Lovelace", "email": "ada@example.com", "message": "Hello from the Django view."}
+
+
+def _handler(rbac=None, security=None):
+    ir = json.load(open(os.path.join(HERE, "fixtures", "ir", "contact.ir.json"), encoding="utf-8"))
+    if security:
+        ir.setdefault("security", {}).update(security)
+    ops = OperationRegistry()
+    ops.register("test:contact.create", lambda p, c: {"id": "rec-1", **p})
+    return TrustedSubmissionHandler({"contact": ir}, ops, rbac=rbac)
+
+
+def _post(view, body):
+    rf = RequestFactory()
+    request = rf.post("/api/forms/submit", data=json.dumps(body), content_type="application/json")
+    return view(request)
+
+
+def test_view_success_returns_200():
+    view = create_submission_view(_handler())
+    resp = _post(view, {"formId": "contact", "values": VALID, "idempotencyKey": "k", "correlationId": "c"})
+    assert resp.status_code == 200
+    assert json.loads(resp.content)["status"] == "succeeded"
+
+
+def test_view_validation_failure_returns_422():
+    view = create_submission_view(_handler())
+    resp = _post(view, {"formId": "contact", "values": {"name": "A", "email": "bad", "message": "x"}, "idempotencyKey": "k", "correlationId": "c"})
+    assert resp.status_code == 422
+    assert json.loads(resp.content)["status"] == "server-validation-failed"
+
+
+def test_view_permission_denied_returns_403():
+    view = create_submission_view(_handler(rbac=SimpleRbacEvaluator(), security={"submitPermissions": ["contact:create"]}))
+    resp = _post(view, {"formId": "contact", "values": VALID, "idempotencyKey": "k", "correlationId": "c", "auth": {"permissions": []}})
+    assert resp.status_code == 403
+    assert json.loads(resp.content)["code"] == "PERMISSION_DENIED"
+
+
+def test_view_rejects_non_post():
+    view = create_submission_view(_handler())
+    rf = RequestFactory()
+    resp = view(rf.get("/api/forms/submit"))
+    assert resp.status_code == 405
+
+
+def test_view_rejects_invalid_json():
+    view = create_submission_view(_handler())
+    rf = RequestFactory()
+    resp = view(rf.post("/api/forms/submit", data="{not json", content_type="application/json"))
+    assert resp.status_code == 400
