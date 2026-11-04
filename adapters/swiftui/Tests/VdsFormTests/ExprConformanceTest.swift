@@ -27,6 +27,6 @@ final class ExprConformanceTest: XCTestCase {
                 if code != expect["code"] as? String { failures.append("\(c["id"]!): expected \(expect["code"]!), got \(code)") }
             }
         }
-        XCTAssertTrue(failures.isEmpty, "\(cases.count) cases, failures:\n" + failures.joined(separator: "\n"))
+        XCTAssertTrue(failures.isEmpty, "\(cases.count) cases, failures: " + failures.joined(separator: " | "))
     }
 }

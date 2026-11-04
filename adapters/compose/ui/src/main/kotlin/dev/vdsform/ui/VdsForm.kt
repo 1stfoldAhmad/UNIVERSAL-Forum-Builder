@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
 fun VdsForm(controller: FormController, submitLabel: String = "Submit") {
     var version by remember { mutableIntStateOf(0) }
     DisposableEffect(controller) {
-        val l = { version++ }
+        val l: () -> Unit = { version += 1 }
         controller.addListener(l)
         onDispose { controller.removeListener(l) }
     }
