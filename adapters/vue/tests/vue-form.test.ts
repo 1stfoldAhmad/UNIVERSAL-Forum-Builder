@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -30,6 +30,24 @@ async function mountForm(name: string, extra: Partial<ConstructorParameters<type
 }
 
 describe('Vue renderer', () => {
+  it('file picker button opens the hidden input, uploads, and resets the input', async () => {
+    const uploadProvider = new TestUploadProvider();
+    const { controller, wrapper } = await mountForm('kyc-documents.vds.json', { uploadProvider });
+    const input = wrapper.get('[data-testid="file-input-kyc.selfie"]');
+    const file = new File(['x'], 'id.png', { type: 'image/png' });
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
+    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function (this: HTMLInputElement) {
+      this.dispatchEvent(new Event('change'));
+    });
+    await wrapper.get('[data-testid="pick-kyc.selfie"]').trigger('click');
+    await tick(); await wrapper.vm.$nextTick();
+    expect(clickSpy).toHaveBeenCalled();
+    expect(wrapper.get('[data-testid="asset-kyc.selfie"]').text()).toContain('id.png');
+    expect((input.element as HTMLInputElement).value).toBe('');
+    clickSpy.mockRestore();
+    controller.dispose(); wrapper.unmount();
+  });
+
   it('renders the canonical contact form and submits through the registered executor', async () => {
     const { controller, wrapper } = await mountForm('contact.vds.json', { executors: testExecutors('test:contact.create') });
     await wrapper.get('[data-testid="input-name"]').setValue('Ada Lovelace');

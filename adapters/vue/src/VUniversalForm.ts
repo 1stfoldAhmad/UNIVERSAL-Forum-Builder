@@ -25,10 +25,11 @@ const VField = defineComponent({
     const slice = useFormField(ctrl, props.path);
     const uploadError = ref<string | null>(null);
     const uploading = ref(false);
+    const fileInput = ref<HTMLInputElement | null>(null);
 
     const set = (v: unknown) => ctrl.setFieldValue(props.path, v);
 
-    const uploadFiles = async (files: FileList | File[]) => {
+    const uploadFiles = async (files: FileList | File[], source: 'picker' | 'drag-drop' = 'picker') => {
       if (!ctrl.uploadProvider) { uploadError.value = 'No upload provider registered.'; return; }
       uploadError.value = null;
       uploading.value = true;
@@ -36,7 +37,7 @@ const VField = defineComponent({
       try {
         for (const file of Array.from(files)) {
           const r = await ctrl.uploadProvider.upload({
-            asset: { id: `${file.name}-${file.size}`, name: file.name, mimeType: file.type || 'application/octet-stream', sizeBytes: file.size, source: 'drag-drop' },
+            asset: { id: `${file.name}-${file.size}`, name: file.name, mimeType: file.type || 'application/octet-stream', sizeBytes: file.size, source },
             constraints: { accept: props.field.validation.accept, maxSizeBytes: props.field.validation.maxSizeBytes },
             auth: ctrl.auth,
           });
@@ -119,10 +120,10 @@ const VField = defineComponent({
             style: 'border:2px dashed #bbb;border-radius:8px;padding:14px;background:#fafafa;',
             'data-testid': `dropzone-${path}`,
             onDragover: (e: DragEvent) => e.preventDefault(),
-            onDrop: (e: DragEvent) => { e.preventDefault(); if (e.dataTransfer?.files) void uploadFiles(e.dataTransfer.files); },
+            onDrop: (e: DragEvent) => { e.preventDefault(); if (e.dataTransfer?.files) void uploadFiles(e.dataTransfer.files, 'drag-drop'); },
           }, [
-            h('input', { ...aria, type: 'file', style: 'display:none;', accept: field.validation.accept?.join(','), multiple: field.validation.multiple, 'data-testid': `file-input-${path}`, onChange: (e: Event) => { const f = (e.target as HTMLInputElement).files; if (f) void uploadFiles(f); } }),
-            h('button', { type: 'button', style: btnSecondary, disabled: s.disabled || uploading.value, 'data-testid': `pick-${path}`, onClick: () => { /* host opens picker via file input click in real DOM */ } }, uploading.value ? 'Uploading…' : 'Choose file'),
+            h('input', { ref: fileInput, ...aria, type: 'file', style: 'display:none;', accept: field.validation.accept?.join(','), multiple: field.validation.multiple, 'data-testid': `file-input-${path}`, onChange: (e: Event) => { const input = e.target as HTMLInputElement; const f = input.files; if (f && f.length) { const files = Array.from(f); input.value = ''; void uploadFiles(files, 'picker'); } } }),
+            h('button', { type: 'button', style: btnSecondary, disabled: s.disabled || uploading.value, 'data-testid': `pick-${path}`, onClick: () => { fileInput.value?.click(); } }, uploading.value ? 'Uploading…' : 'Choose file'),
             names ? h('p', { style: helpStyle, 'data-testid': `asset-${path}` }, `${names} ✓ uploaded`) : null,
             uploadError.value ? h('p', { role: 'alert', style: errorStyle, 'data-testid': `upload-error-${path}` }, uploadError.value) : null,
           ].filter(Boolean) as VNode[]);
