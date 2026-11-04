@@ -275,6 +275,11 @@ class TrustedSubmissionHandler:
                       "message": "A submission with this idempotency key is already in progress."}
             do_audit(result, operation_ref, ["IDEMPOTENCY_IN_PROGRESS"])
             return result
+        if claim["kind"] == "expired":
+            result = {"status": "business-rejected", "code": "IDEMPOTENCY_RECOVERY_REQUIRED",
+                      "message": "A previous claim expired before completion. Reconcile the operation outcome (transaction/outbox) before retrying; automatic re-execution is unsafe."}
+            do_audit(result, operation_ref, ["IDEMPOTENCY_RECOVERY_REQUIRED"])
+            return result
 
         try:
             data = handler(payload, {

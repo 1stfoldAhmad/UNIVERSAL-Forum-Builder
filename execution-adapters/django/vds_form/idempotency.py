@@ -17,7 +17,10 @@ import hashlib
 import json
 import sqlite3
 import threading
+import time
 from typing import Any, Dict, Optional, Protocol
+
+DEFAULT_IDEMPOTENCY_LEASE_MS = 5 * 60 * 1000
 
 
 def canonical_json(value: Any) -> str:
@@ -44,7 +47,7 @@ def scoped_idempotency_key(*, tenant_id: Optional[str], user_id: Optional[str],
 
 
 class IdempotencyStore(Protocol):
-    def claim(self, key: str, fingerprint: str) -> Dict[str, Any]: ...
+    def claim(self, key: str, fingerprint: str, opts: Optional[Dict[str, Any]] = None) -> Dict[str, Any]: ...
     def complete(self, key: str, result: Dict[str, Any]) -> None: ...
     def release(self, key: str) -> None: ...
 
@@ -56,16 +59,21 @@ class InMemoryIdempotencyStore:
         self._records: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.Lock()
 
-    def claim(self, key: str, fingerprint: str) -> Dict[str, Any]:
+    def claim(self, key: str, fingerprint: str, opts: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        opts = opts or {}
+        now = opts.get("now", int(time.time() * 1000))
+        lease_ms = opts.get("leaseMs", DEFAULT_IDEMPOTENCY_LEASE_MS)
         with self._lock:
             rec = self._records.get(key)
             if rec is None:
-                self._records[key] = {"fingerprint": fingerprint, "status": "in-progress"}
+                self._records[key] = {"fingerprint": fingerprint, "status": "in-progress", "claimedAt": now, "leaseExpiresAt": now + lease_ms if lease_ms > 0 else 0}
                 return {"kind": "claimed"}
             if rec["fingerprint"] != fingerprint:
                 return {"kind": "conflict"}
             if rec["status"] == "complete" and rec.get("result") is not None:
                 return {"kind": "replay", "result": rec["result"]}
+            if rec.get("leaseExpiresAt", 0) > 0 and now > rec["leaseExpiresAt"]:
+                return {"kind": "expired", "claimedAt": rec["claimedAt"], "leaseExpiresAt": rec["leaseExpiresAt"]}
             return {"kind": "in-progress"}
 
     def complete(self, key: str, result: Dict[str, Any]) -> None:
@@ -97,31 +105,44 @@ class SqliteIdempotencyStore:
                 fingerprint TEXT NOT NULL,
                 status TEXT NOT NULL CHECK (status IN ('in-progress','complete')),
                 result_json TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                claimed_at INTEGER NOT NULL DEFAULT 0,
+                lease_expires_at INTEGER NOT NULL DEFAULT 0
             )"""
         )
+        for col in ("claimed_at INTEGER NOT NULL DEFAULT 0", "lease_expires_at INTEGER NOT NULL DEFAULT 0"):
+            try:
+                self._conn.execute(f"ALTER TABLE vds_form_idempotency ADD COLUMN {col}")
+            except sqlite3.OperationalError:
+                pass
         self._conn.commit()
 
-    def claim(self, key: str, fingerprint: str) -> Dict[str, Any]:
+    def claim(self, key: str, fingerprint: str, opts: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        opts = opts or {}
+        now = opts.get("now", int(time.time() * 1000))
+        lease_ms = opts.get("leaseMs", DEFAULT_IDEMPOTENCY_LEASE_MS)
+        lease_expires_at = now + lease_ms if lease_ms > 0 else 0
         with self._lock:
             try:
                 self._conn.execute(
-                    "INSERT INTO vds_form_idempotency (key, fingerprint, status) VALUES (?, ?, 'in-progress')",
-                    (key, fingerprint),
+                    "INSERT INTO vds_form_idempotency (key, fingerprint, status, claimed_at, lease_expires_at) VALUES (?, ?, 'in-progress', ?, ?)",
+                    (key, fingerprint, now, lease_expires_at),
                 )
                 self._conn.commit()
                 return {"kind": "claimed"}
             except sqlite3.IntegrityError:
                 row = self._conn.execute(
-                    "SELECT fingerprint, status, result_json FROM vds_form_idempotency WHERE key = ?", (key,)
+                    "SELECT fingerprint, status, result_json, claimed_at, lease_expires_at FROM vds_form_idempotency WHERE key = ?", (key,)
                 ).fetchone()
                 if row is None:
                     return {"kind": "in-progress"}
-                fp, status, result_json = row
+                fp, status, result_json, claimed_at, db_lease = row
                 if fp != fingerprint:
                     return {"kind": "conflict"}
                 if status == "complete" and result_json is not None:
                     return {"kind": "replay", "result": json.loads(result_json)}
+                if db_lease > 0 and now > db_lease:
+                    return {"kind": "expired", "claimedAt": claimed_at, "leaseExpiresAt": db_lease}
                 return {"kind": "in-progress"}
 
     def complete(self, key: str, result: Dict[str, Any]) -> None:

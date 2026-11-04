@@ -53,10 +53,12 @@ final class Idempotency
     }
 }
 
+const DEFAULT_IDEMPOTENCY_LEASE_MS = 300000;
+
 interface IdempotencyStore
 {
     /** Atomically claim a scoped key for a payload fingerprint. */
-    public function claim(string $key, string $fingerprint): array;
+    public function claim(string $key, string $fingerprint, array $opts = []): array;
     /** Record the successful result for a claimed key. */
     public function complete(string $key, array $result): void;
     /** Release an in-progress claim after a failed execution so retries can run. */
@@ -68,15 +70,18 @@ final class InMemoryIdempotencyStore implements IdempotencyStore
 {
     private array $records = [];
 
-    public function claim(string $key, string $fingerprint): array
+    public function claim(string $key, string $fingerprint, array $opts = []): array
     {
+        $now = $opts['now'] ?? (int)(microtime(true) * 1000);
+        $leaseMs = $opts['leaseMs'] ?? DEFAULT_IDEMPOTENCY_LEASE_MS;
         if (!isset($this->records[$key])) {
-            $this->records[$key] = ['fingerprint' => $fingerprint, 'status' => 'in-progress'];
+            $this->records[$key] = ['fingerprint' => $fingerprint, 'status' => 'in-progress', 'claimedAt' => $now, 'leaseExpiresAt' => $leaseMs > 0 ? $now + $leaseMs : 0];
             return ['kind' => 'claimed'];
         }
         $rec = $this->records[$key];
         if ($rec['fingerprint'] !== $fingerprint) return ['kind' => 'conflict'];
         if ($rec['status'] === 'complete' && isset($rec['result'])) return ['kind' => 'replay', 'result' => $rec['result']];
+        if (($rec['leaseExpiresAt'] ?? 0) > 0 && $now > $rec['leaseExpiresAt']) return ['kind' => 'expired', 'claimedAt' => $rec['claimedAt'], 'leaseExpiresAt' => $rec['leaseExpiresAt']];
         return ['kind' => 'in-progress'];
     }
 
@@ -115,9 +120,14 @@ final class PdoIdempotencyStore implements IdempotencyStore
                 fingerprint VARCHAR(64) NOT NULL,
                 status VARCHAR(16) NOT NULL,
                 result_json TEXT NULL,
-                created_at VARCHAR(40) NOT NULL
+                created_at VARCHAR(40) NOT NULL,
+                claimed_at BIGINT NOT NULL DEFAULT 0,
+                lease_expires_at BIGINT NOT NULL DEFAULT 0
             )'
         );
+        foreach (['claimed_at BIGINT NOT NULL DEFAULT 0', 'lease_expires_at BIGINT NOT NULL DEFAULT 0'] as $col) {
+            try { $this->pdo->exec('ALTER TABLE vds_form_idempotency ADD COLUMN ' . $col); } catch (\PDOException $e) { /* already present */ }
+        }
     }
 
     public static function sqlite(string $path): self
@@ -125,11 +135,14 @@ final class PdoIdempotencyStore implements IdempotencyStore
         return new self(new \PDO('sqlite:' . $path));
     }
 
-    public function claim(string $key, string $fingerprint): array
+    public function claim(string $key, string $fingerprint, array $opts = []): array
     {
+        $now = $opts['now'] ?? (int)(microtime(true) * 1000);
+        $leaseMs = $opts['leaseMs'] ?? DEFAULT_IDEMPOTENCY_LEASE_MS;
+        $leaseExpiresAt = $leaseMs > 0 ? $now + $leaseMs : 0;
         try {
-            $stmt = $this->pdo->prepare('INSERT INTO vds_form_idempotency (idem_key, fingerprint, status, created_at) VALUES (?, ?, ?, ?)');
-            $stmt->execute([$key, $fingerprint, 'in-progress', gmdate('c')]);
+            $stmt = $this->pdo->prepare('INSERT INTO vds_form_idempotency (idem_key, fingerprint, status, created_at, claimed_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?)');
+            $stmt->execute([$key, $fingerprint, 'in-progress', gmdate('c'), $now, $leaseExpiresAt]);
             return ['kind' => 'claimed'];
         } catch (\PDOException $e) {
             // Unique violation (SQLite/MySQL 23000, Postgres 23505) → row exists.
@@ -137,13 +150,16 @@ final class PdoIdempotencyStore implements IdempotencyStore
             if ($sqlstate !== '23000' && $sqlstate !== '23505' && !str_contains(strtolower($e->getMessage()), 'unique')) {
                 throw $e;
             }
-            $stmt = $this->pdo->prepare('SELECT fingerprint, status, result_json FROM vds_form_idempotency WHERE idem_key = ?');
+            $stmt = $this->pdo->prepare('SELECT fingerprint, status, result_json, claimed_at, lease_expires_at FROM vds_form_idempotency WHERE idem_key = ?');
             $stmt->execute([$key]);
             $row = $stmt->fetch(\PDO::FETCH_ASSOC);
             if ($row === false) return ['kind' => 'in-progress'];
             if ($row['fingerprint'] !== $fingerprint) return ['kind' => 'conflict'];
             if ($row['status'] === 'complete' && $row['result_json'] !== null) {
                 return ['kind' => 'replay', 'result' => json_decode($row['result_json'], true)];
+            }
+            if ((int)$row['lease_expires_at'] > 0 && $now > (int)$row['lease_expires_at']) {
+                return ['kind' => 'expired', 'claimedAt' => (int)$row['claimed_at'], 'leaseExpiresAt' => (int)$row['lease_expires_at']];
             }
             return ['kind' => 'in-progress'];
         }

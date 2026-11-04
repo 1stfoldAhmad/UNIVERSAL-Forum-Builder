@@ -23,7 +23,7 @@ import {
   DataSourceCache, DataSourceProviderRegistry, evaluateParams, mapOptions,
 } from '@vds-form/data-sources';
 import {
-  draftScopeKey, loadDraftChecked, makeDraftEnvelope,
+  draftScopeKey, loadDraftChecked, makeDraftEnvelope, sensitiveTemplatePaths, stripSensitiveValues,
 } from '@vds-form/persistence';
 import {
   SubmissionExecutorRegistry, buildSubmissionPayload, configError,
@@ -652,6 +652,7 @@ export class FormController {
       const envelope = makeDraftEnvelope(
         this.ir.formId, this.ir.formVersion, this.ir.specVersion, scopeKey,
         this.getValues(), this.ir.persistence.drafts.ttlSeconds, this.now(),
+        { sensitivePaths: this.ir.persistence.drafts.includeSensitive ? [] : sensitiveTemplatePaths(this.ir, this.registry) },
       );
       await this.opts.drafts.save(envelope);
       this.draft = { status: 'saved', savedAt: envelope.savedAt };
@@ -742,10 +743,19 @@ export class FormController {
           return this.finishSubmission({ status: 'network-failure', code: 'OFFLINE', message: 'Offline and this operation does not permit queueing.', retryable: true }, 'submission-failed');
         }
         const scopeKey = draftScopeKey(this.ir.persistence, this.uiAuth, this.opts.deviceId);
+        // Rebuild the queued payload from sensitive-stripped field values so
+        // mapped operation parameters cannot reintroduce passwords/tokens.
+        const queueSource = this.ir.persistence.offline?.includeSensitive
+          ? this.values
+          : stripSensitiveValues(this.values, sensitiveTemplatePaths(this.ir, this.registry));
+        const queued = buildSubmissionPayload(this.ir, queueSource, this.effective, def);
+        if (queued.issues.some((i) => i.severity === 'error')) {
+          return this.finishSubmission({ status: 'validation-failed', issues: queued.issues }, 'invalid');
+        }
         const record: QueuedSubmissionRecord = {
           id: this.newId(), operationRef: def.operationRef, operationVersion: def.operationVersion,
           formId: this.ir.formId, formVersion: this.ir.formVersion, specVersion: this.ir.specVersion,
-          scopeKey, values: payload, idempotencyKey, createdAt: this.now().toISOString(),
+          scopeKey, values: queued.payload, idempotencyKey, createdAt: this.now().toISOString(),
           status: 'queued', attempts: 0, maxAttempts: 5,
         };
         try {

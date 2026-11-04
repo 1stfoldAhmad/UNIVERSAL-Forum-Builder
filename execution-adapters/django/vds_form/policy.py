@@ -7,6 +7,7 @@ import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 FORBIDDEN_SEGMENTS = {"__proto__", "prototype", "constructor"}
+OPERATION_INPUT_LIMITS = {"maxDepth": 64, "maxNodes": 10000, "maxStringLength": 10000, "maxArrayLength": 1000, "maxObjectKeys": 1000}
 MAX_DEPTH = 64
 MAX_NODES = 10000
 ASSET_KEYS = {"id", "name", "mimeType", "sizeBytes", "source", "localUri", "assetRef", "url"}
@@ -206,34 +207,49 @@ def validate_operation_inputs(defs: Optional[Dict[str, Any]], values: Dict[str, 
     issues: List[Dict[str, Any]] = []
     if not defs:
         return out, issues
+    nodes = 0
+    lim = OPERATION_INPUT_LIMITS
 
-    def check(d: Dict[str, Any], value: Any, path: str) -> Any:
+    def check(d: Optional[Dict[str, Any]], value: Any, path: str, depth: int) -> Any:
+        nonlocal nodes
+        if depth > lim["maxDepth"]:
+            issues.append(_issue("OPERATION_INPUT_TOO_DEEP", "Operation input exceeds maximum nesting depth.", path))
+            return None
+        nodes += 1
+        if nodes > lim["maxNodes"]:
+            issues.append(_issue("OPERATION_INPUT_TOO_MANY_NODES", "Operation input exceeds maximum node count.", path))
+            return None
         if value is None:
-            if d.get("required"):
+            if d and d.get("required"):
                 issues.append(_issue("OPERATION_INPUT_REQUIRED", "Required operation input is missing.", path))
             return None
-        if not _type_matches(value, d.get("valueType", "string")):
+        if isinstance(value, str) and len(value) > lim["maxStringLength"]:
+            issues.append(_issue("OPERATION_INPUT_STRING_TOO_LARGE", "Operation input string exceeds maximum length.", path))
+            return None
+        if d is not None and not _type_matches(value, d.get("valueType", "string")):
             issues.append(_issue("OPERATION_INPUT_TYPE_INVALID", f"Expected {d.get('valueType')}.", path))
             return None
         if isinstance(value, list):
-            if not d.get("items"):
-                return value
-            cleaned = [check(d["items"], item, f"{path}.{i}") for i, item in enumerate(value)]
+            if len(value) > lim["maxArrayLength"]:
+                issues.append(_issue("OPERATION_INPUT_ARRAY_TOO_LARGE", "Operation input array exceeds maximum length.", path))
+                return None
+            items = d.get("items") if d else None
+            cleaned = [check(items, item, f"{path}.{i}", depth + 1) for i, item in enumerate(value)]
             return [v for v in cleaned if v is not None]
         if isinstance(value, dict):
+            if len(value) > lim["maxObjectKeys"]:
+                issues.append(_issue("OPERATION_INPUT_OBJECT_TOO_LARGE", "Operation input object exceeds maximum property count.", path))
+                return None
             obj: Dict[str, Any] = {}
             for k, v in value.items():
                 if k in FORBIDDEN_SEGMENTS:
                     issues.append(_issue("UNSAFE_PROPERTY", "Prototype-pollution property rejected.", f"{path}.{k}"))
                     continue
-                child = (d.get("properties") or {}).get(k)
-                if child is None:
-                    if not d.get("additionalProperties"):
-                        issues.append(_issue("UNKNOWN_PROPERTY", "Operation input property is not declared.", f"{path}.{k}"))
-                    else:
-                        obj[k] = v
+                child = (d.get("properties") or {}).get(k) if d else None
+                if child is None and d is not None and not d.get("additionalProperties"):
+                    issues.append(_issue("UNKNOWN_PROPERTY", "Operation input property is not declared.", f"{path}.{k}"))
                     continue
-                cleaned = check(child, v, f"{path}.{k}")
+                cleaned = check(child, v, f"{path}.{k}", depth + 1)
                 if cleaned is not None:
                     obj[k] = cleaned
             return obj
@@ -243,7 +259,7 @@ def validate_operation_inputs(defs: Optional[Dict[str, Any]], values: Dict[str, 
         if name in FORBIDDEN_SEGMENTS:
             issues.append(_issue("UNSAFE_PROPERTY", "Operation input name rejected.", name))
             continue
-        cleaned = check(d, values.get(name), name)
+        cleaned = check(d, values.get(name), name, 0)
         if cleaned is not None:
             out[name] = cleaned
     return out, issues

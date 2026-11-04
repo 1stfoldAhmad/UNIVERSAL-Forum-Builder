@@ -278,6 +278,11 @@ export class TrustedSubmissionHandler {
       this.audit(ir, operationRef, request, auth, result, ['IDEMPOTENCY_IN_PROGRESS']);
       return result;
     }
+    if (claim.kind === 'expired') {
+      const result: SubmissionResult = { status: 'business-rejected', code: 'IDEMPOTENCY_RECOVERY_REQUIRED', message: 'A previous claim expired before completion. Reconcile the operation outcome (transaction/outbox) before retrying; automatic re-execution is unsafe.' };
+      this.audit(ir, operationRef, request, auth, result, ['IDEMPOTENCY_RECOVERY_REQUIRED']);
+      return result;
+    }
 
     let result: SubmissionResult;
     try {

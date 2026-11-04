@@ -4,9 +4,22 @@
  * same contracts separately. Scope keys enforce user/tenant isolation.
  */
 import type {
-  AuthContext, DraftEnvelope, DraftStorageAdapter, FormValues,
+  AuthContext, DraftEnvelope, DraftStorageAdapter, FormIR, FormValues,
   OfflineQueueAdapter, PersistenceDef, QueuedSubmissionRecord,
 } from '@vds-form/types';
+import type { FieldRegistry } from '@vds-form/fields';
+import { stripPaths } from '@vds-form/validation';
+
+/** Template paths for fields whose registry contract marks them sensitive. */
+export function sensitiveTemplatePaths(ir: FormIR, fields: FieldRegistry): string[] {
+  return ir.fields.filter((f) => fields.get(f.type)?.sensitive === true).map((f) => f.key);
+}
+
+/** Remove sensitive subtrees (including repeater rows) before persistence. */
+export function stripSensitiveValues(values: FormValues, sensitivePaths: string[]): FormValues {
+  if (sensitivePaths.length === 0) return values;
+  return (stripPaths(values, sensitivePaths) ?? {}) as FormValues;
+}
 
 export function draftScopeKey(def: PersistenceDef, auth?: AuthContext, deviceId = 'device'): string {
   const scope = def.drafts?.scope ?? 'device';
@@ -79,6 +92,7 @@ export async function loadDraftChecked(
 export function makeDraftEnvelope(
   formId: string, formVersion: string, specVersion: string, scopeKey: string,
   values: FormValues, ttlSeconds?: number, now: Date = new Date(),
+  options: { sensitivePaths?: string[] } = {},
 ): DraftEnvelope {
   // Never persist device-local asset handles into drafts.
   const scrub = (v: unknown): unknown => {
@@ -94,7 +108,7 @@ export function makeDraftEnvelope(
   };
   return {
     envelopeVersion: 1, formId, formVersion, specVersion, scopeKey,
-    values: scrub(values) as FormValues,
+    values: scrub(stripSensitiveValues(values, options.sensitivePaths ?? [])) as FormValues,
     savedAt: now.toISOString(),
     expiresAt: ttlSeconds ? new Date(now.getTime() + ttlSeconds * 1000).toISOString() : undefined,
   };

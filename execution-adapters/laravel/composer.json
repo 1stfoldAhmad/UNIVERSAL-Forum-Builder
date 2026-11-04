@@ -28,7 +28,9 @@
             "php tests/run-controller.php",
             "php tests/run-security.php",
             "php tests/run-security-policy.php",
-            "php tests/run-remediation.php"
+            "php tests/run-remediation.php",
+            "php tests/run-operation-limits.php",
+            "php tests/run-idempotency-recovery.php"
         ]
     }
 }
