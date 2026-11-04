@@ -8,7 +8,10 @@ import type {
   SubmissionDef, SubmissionExecutor, SubmissionResult, ValidationIssue,
 } from '@vds-form/types';
 import { getPath } from '@vds-form/expressions';
-import type { EffectiveFieldState } from '@vds-form/validation';
+import {
+  collectUnknownPropertyIssues, expandFieldInstances, hiddenTemplatePaths, isPathUnder,
+  stripPaths, validateOperationInputs, type EffectiveFieldState,
+} from '@vds-form/validation';
 
 export class SubmissionExecutorRegistry {
   private executors = new Map<string, SubmissionExecutor>();
@@ -22,6 +25,7 @@ export class SubmissionExecutorRegistry {
     }
     this.executors.set(executor.scheme, executor);
   }
+  unregister(scheme: string): boolean { return this.executors.delete(scheme); }
   get(scheme: string): SubmissionExecutor | undefined { return this.executors.get(scheme); }
   forRef(operationRef: string): SubmissionExecutor | undefined {
     const scheme = operationRef.split(':')[0];
@@ -35,37 +39,35 @@ export function schemeOf(operationRef: string): string {
   return operationRef.split(':')[0] ?? '';
 }
 
-/** Build the normalized, mapped submission payload from visible values. */
+/** Build the normalized, mapped submission payload from visible values.
+ * Hidden values are stripped recursively (including repeater rows); undeclared
+ * properties are rejected; operation inputs are validated against their typed
+ * contract before execution. */
 export function buildSubmissionPayload(
   ir: FormIR, values: FormValues, state: EffectiveFieldState, def: SubmissionDef,
 ): { payload: Record<string, unknown>; issues: ValidationIssue[] } {
   const issues: ValidationIssue[] = [];
-  const visibleValues: FormValues = {};
-  const hiddenKeys = new Set(
-    ir.fields.filter((f) => !def.includeHidden && state.visibility[f.id] === false).map((f) => f.key),
-  );
-  const isUnderHidden = (key: string) => [...hiddenKeys].some((h) => key === h || key.startsWith(`${h}.`) || key.startsWith(`${h}[`));
-  for (const [k, v] of Object.entries(values)) {
-    if (!isUnderHidden(k)) visibleValues[k] = v;
+  const hidden = hiddenTemplatePaths(ir, state.visibility, def.includeHidden);
+  const stripped = (stripPaths(values, hidden) ?? {}) as FormValues;
+  const opDefs = def.operationInputs;
+  const opRoots = new Set(Object.keys(opDefs ?? {}));
+  const opRaw: FormValues = {};
+  const fieldValues: FormValues = {};
+  for (const [k, v] of Object.entries(stripped)) {
+    if (opRoots.has(k)) opRaw[k] = v;
+    else fieldValues[k] = v;
   }
-  // Strip hidden nested keys recursively (shallow-top approach handles nested objects).
-  const stripHidden = (obj: Record<string, unknown>, prefix: string): Record<string, unknown> => {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(obj)) {
-      const path = prefix ? `${prefix}.${k}` : k;
-      if (isUnderHidden(path)) continue;
-      out[k] = v && typeof v === 'object' && !Array.isArray(v) ? stripHidden(v as Record<string, unknown>, path) : v;
-    }
-    return out;
-  };
-  const cleaned = stripHidden(visibleValues, '');
+  issues.push(...collectUnknownPropertyIssues(ir, fieldValues));
+  const op = validateOperationInputs(opDefs, opRaw);
+  issues.push(...op.issues);
+  if (issues.some((i) => i.severity === 'error')) return { payload: {}, issues };
 
   let payload: Record<string, unknown>;
   if (def.inputMapping && Object.keys(def.inputMapping).length) {
     payload = {};
     for (const [param, sourcePath] of Object.entries(def.inputMapping)) {
-      if (isUnderHidden(sourcePath)) continue;
-      const v = getPath(cleaned, sourcePath);
+      if (!def.includeHidden && hidden.some((h) => isPathUnder(sourcePath, h))) continue;
+      const v = getPath(fieldValues, sourcePath);
       if (v === undefined) {
         issues.push({ code: 'MAPPING_SOURCE_MISSING', message: `Mapping source "${sourcePath}" has no value.`, path: sourcePath, severity: 'warning', source: 'schema' });
         continue;
@@ -73,22 +75,25 @@ export function buildSubmissionPayload(
       payload[param] = v;
     }
   } else {
-    payload = cleaned;
+    payload = { ...fieldValues };
   }
+  Object.assign(payload, op.values);
 
-  // Assets must be uploaded references before leaving the client.
-  const checkAssets = (v: unknown, path: string) => {
-    if (Array.isArray(v)) { v.forEach((x, i) => checkAssets(x, `${path}.${i}`)); return; }
+  // Assets must be uploaded references before leaving the client, including
+  // assets inside repeater rows (concrete paths, not template paths).
+  const checkAssets = (v: unknown, path: string, fieldId?: string) => {
+    if (Array.isArray(v)) { v.forEach((x, i) => checkAssets(x, `${path}.${i}`, fieldId)); return; }
     if (v && typeof v === 'object') {
-      const a = v as { assetRef?: string; localUri?: string; mimeType?: string };
+      const a = v as { assetRef?: string; localUri?: string };
       if (a.localUri !== undefined && a.assetRef === undefined) {
-        issues.push({ code: 'ASSET_NOT_UPLOADED', message: 'Asset must be uploaded before submission.', path, severity: 'error', source: 'field' });
+        issues.push({ code: 'ASSET_NOT_UPLOADED', message: 'Asset must be uploaded before submission.', path, fieldId, severity: 'error', source: 'field' });
       }
     }
   };
-  for (const f of ir.fields) {
+  for (const inst of expandFieldInstances(ir, fieldValues)) {
+    const f = inst.field;
     if (f.valueType === 'asset' || f.valueType === 'asset[]') {
-      checkAssets(getPath(payload, f.key) ?? getPath(cleaned, f.key), f.key);
+      checkAssets(getPath(fieldValues, inst.concreteKey), inst.concreteKey, f.id);
     }
   }
   return { payload, issues };
@@ -127,7 +132,7 @@ export async function replayOfflineQueue(
   records: QueuedSubmissionRecord[],
   registry: SubmissionExecutorRegistry,
   update: (id: string, patch: Partial<QueuedSubmissionRecord>) => Promise<void>,
-  opts: { auth?: SubmissionContext['authenticatedContext']; maxAttempts?: number } = {},
+  opts: { maxAttempts?: number } = {},
 ): Promise<{ sent: string[]; failed: string[]; conflicted: string[] }> {
   const sent: string[] = []; const failed: string[] = []; const conflicted: string[] = [];
   for (const rec of records) {
@@ -144,7 +149,7 @@ export async function replayOfflineQueue(
       { operationRef: rec.operationRef, operationVersion: rec.operationVersion },
       {
         formId: rec.formId, formVersion: rec.formVersion, specVersion: rec.specVersion,
-        values: rec.values, authenticatedContext: opts.auth,
+        values: rec.values,
         idempotencyKey: rec.idempotencyKey, correlationId: `replay-${rec.id}`,
       },
     );

@@ -7,6 +7,10 @@
  */
 declare(strict_types=1);
 
+require_once __DIR__ . '/../src/Policy.php';
+require_once __DIR__ . '/../src/Payload.php';
+
+
 // Load Composer's autoloader when present so optional integrations (e.g. a real
 // Illuminate\Http\Request in CI) are available. The core suites never require it.
 $autoload = __DIR__ . '/../vendor/autoload.php';

@@ -11,14 +11,19 @@
 import { evaluate, deepEqual, type EvalScope } from '@vds-form/expressions';
 import type { Expr } from '@vds-form/types';
 import { compileForm } from '@vds-form/compiler';
-import { computeEffectiveState, validateValues } from '@vds-form/validation';
+import {
+  collectUnknownPropertyIssues, computeReadPolicy, filterReadableValues,
+  hiddenTemplatePaths, stripPaths, computeEffectiveState, validateValues,
+} from '@vds-form/validation';
 import { buildSubmissionPayload } from '@vds-form/submission';
 import type { FormDocument } from '@vds-form/types';
 import expressionFixtures from '../fixtures/expressions.json';
 import formFixtures from '../fixtures/forms.json';
+import securityFixtures from '../fixtures/security-paths.json';
 
 export const EXPRESSION_FIXTURES = expressionFixtures;
 export const FORM_FIXTURES = formFixtures;
+export const SECURITY_FIXTURES = securityFixtures;
 export const CONFORMANCE_SPEC_VERSION = '1.0.0';
 
 export interface CaseResult {
@@ -107,9 +112,44 @@ export function runFormConformance(): CaseResult[] {
   return results;
 }
 
+
+interface SecurityField { id: string; key: string; type: string; valueType: string; repeaterId?: string; parentId?: string }
+const minimalIr = (fields: SecurityField[], fieldAccess?: Record<string, { read?: string[] }>) => ({
+  fields,
+  security: fieldAccess ? { fieldAccess } : {},
+}) as never;
+
+/** Shared hidden/unknown/read security vectors (TS reference). */
+export function runSecurityConformance(): CaseResult[] {
+  const results: CaseResult[] = [];
+  for (const c of securityFixtures.hidden as Array<{ id: string; fields: SecurityField[]; hiddenFieldIds: string[]; values: Record<string, unknown>; expected: Record<string, unknown> }>) {
+    const ir = minimalIr(c.fields);
+    const visibility: Record<string, boolean> = {};
+    for (const f of c.fields) visibility[f.id] = !c.hiddenFieldIds.includes(f.id);
+    const templates = hiddenTemplatePaths(ir, visibility, false);
+    const actual = stripPaths(c.values, templates);
+    results.push({ suite: 'security-hidden', id: c.id, passed: deepEqual(actual, c.expected), expected: c.expected, actual });
+  }
+  for (const c of securityFixtures.unknown as Array<{ id: string; fields: SecurityField[]; values: Record<string, unknown>; expectCodes: string[] }>) {
+    const issues = collectUnknownPropertyIssues(minimalIr(c.fields), c.values);
+    const codes = issues.map((i) => i.code);
+    const passed = c.expectCodes.length === 0 ? codes.length === 0 : c.expectCodes.every((code) => codes.includes(code));
+    results.push({ suite: 'security-unknown', id: c.id, passed, expected: c.expectCodes, actual: codes });
+  }
+  for (const c of securityFixtures.read as Array<{ id: string; fields: SecurityField[]; fieldAccess: Record<string, { read?: string[] }>; permissions: string[]; rbac: boolean; values: Record<string, unknown>; expected: Record<string, unknown> }>) {
+    const ir = minimalIr(c.fields, c.fieldAccess);
+    const auth = { userId: 'u1', tenantId: 't1', roles: [], permissions: c.permissions };
+    const rbac = c.rbac ? { evaluate: (_a: unknown, required: string[]) => { const missing = required.filter((p) => !c.permissions.includes(p)); return { allowed: missing.length === 0, missing }; } } : undefined;
+    const policy = computeReadPolicy(ir, auth, rbac);
+    const actual = filterReadableValues(ir, c.values, policy.denied);
+    results.push({ suite: 'security-read', id: c.id, passed: deepEqual(actual, c.expected), expected: c.expected, actual });
+  }
+  return results;
+}
+
 /** Run every conformance suite and aggregate a report. */
 export function runConformance(): ConformanceReport {
-  const results = [...runExpressionConformance(), ...runFormConformance()];
+  const results = [...runExpressionConformance(), ...runFormConformance(), ...runSecurityConformance()];
   const passed = results.filter((r) => r.passed).length;
   return {
     specVersion: CONFORMANCE_SPEC_VERSION,

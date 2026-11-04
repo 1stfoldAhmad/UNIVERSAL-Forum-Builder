@@ -27,6 +27,8 @@ const all = [
   'run-submission.php',
   'run-controller.php',
   'run-security.php',
+  'run-security-policy.php',
+  'run-remediation.php',
 ];
 const requested = process.argv.slice(2);
 const suites = requested.length ? requested : all;

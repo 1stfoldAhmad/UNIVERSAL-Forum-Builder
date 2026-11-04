@@ -123,6 +123,7 @@ export class FieldRegistry {
     }
     this.contracts.set(contract.type, contract);
   }
+  unregister(type: string): boolean { return this.contracts.delete(type); }
   get(type: string): FieldContract | undefined { return this.contracts.get(type); }
   has(type: string): boolean { return this.contracts.has(type); }
   list(): FieldContract[] { return [...this.contracts.values()].sort((a, b) => a.type.localeCompare(b.type)); }

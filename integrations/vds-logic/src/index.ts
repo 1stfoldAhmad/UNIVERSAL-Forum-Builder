@@ -65,16 +65,22 @@ export function mapExecutionResult(
   }
 }
 
+export interface VdsExecutorOptions {
+  /** Server-derived principal; never taken from SubmissionContext. */
+  auth?: AuthContext;
+  resolveAuth?: () => AuthContext | undefined;
+}
+
 export class VdsLogicExecutor implements SubmissionExecutor {
   readonly scheme = 'logic';
   readonly contract: ExecutorContract = { supportsOfflineQueue: false, idempotent: false, trusted: true };
-  constructor(private engine: LogicEngine) {}
+  constructor(private engine: LogicEngine, private options: VdsExecutorOptions = {}) {}
   supports(action: SubmissionAction): boolean {
     try { this.engine.getFunctionDef(operationId(action.operationRef)); return true; } catch { return false; }
   }
   async execute(action: SubmissionAction, context: SubmissionContext): Promise<SubmissionResult> {
     const result = await this.engine.callFunction(operationId(action.operationRef), context.values, {
-      signal: context.signal, user: authToUser(context.authenticatedContext),
+      signal: context.signal, user: authToUser(this.options.resolveAuth ? this.options.resolveAuth() : this.options.auth),
     }) as EngineExecutionResult;
     return mapExecutionResult(result, action.operationRef, context.idempotencyKey, this.contract);
   }
@@ -83,19 +89,19 @@ export class VdsLogicExecutor implements SubmissionExecutor {
 export class VdsWorkflowExecutor implements SubmissionExecutor {
   readonly scheme = 'workflow';
   readonly contract: ExecutorContract = { supportsOfflineQueue: false, idempotent: false, trusted: true };
-  constructor(private engine: LogicEngine, private timeoutMs = 30000) {}
+  constructor(private engine: LogicEngine, private timeoutMs = 30000, private options: VdsExecutorOptions = {}) {}
   supports(action: SubmissionAction): boolean {
     try { this.engine.getFlowDef(operationId(action.operationRef)); return true; } catch { return false; }
   }
   async execute(action: SubmissionAction, context: SubmissionContext): Promise<SubmissionResult> {
     const result = await this.engine.executeFlow(operationId(action.operationRef), {
       input: context.values, signal: context.signal,
-      user: authToUser(context.authenticatedContext), timeoutMs: this.timeoutMs,
+      user: authToUser(this.options.resolveAuth ? this.options.resolveAuth() : this.options.auth), timeoutMs: this.timeoutMs,
     }) as EngineExecutionResult;
     return mapExecutionResult(result, action.operationRef, context.idempotencyKey, this.contract);
   }
 }
 
-export function createVdsExecutors(engine: LogicEngine): { logic: VdsLogicExecutor; workflow: VdsWorkflowExecutor } {
-  return { logic: new VdsLogicExecutor(engine), workflow: new VdsWorkflowExecutor(engine) };
+export function createVdsExecutors(engine: LogicEngine, options: VdsExecutorOptions = {}): { logic: VdsLogicExecutor; workflow: VdsWorkflowExecutor } {
+  return { logic: new VdsLogicExecutor(engine, options), workflow: new VdsWorkflowExecutor(engine, 30000, options) };
 }

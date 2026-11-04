@@ -1,0 +1,532 @@
+{
+  "hidden": [
+    {
+      "id": "repeater-row-secret",
+      "fields": [
+        {
+          "id": "items",
+          "key": "items",
+          "type": "repeater",
+          "valueType": "object[]"
+        },
+        {
+          "id": "secret",
+          "key": "items[].secret",
+          "type": "text",
+          "valueType": "string",
+          "repeaterId": "items"
+        },
+        {
+          "id": "name",
+          "key": "items[].name",
+          "type": "text",
+          "valueType": "string",
+          "repeaterId": "items"
+        }
+      ],
+      "hiddenFieldIds": [
+        "secret"
+      ],
+      "values": {
+        "items": [
+          {
+            "secret": "leak",
+            "name": "visible-0"
+          },
+          {
+            "secret": "leak2",
+            "name": "visible-1"
+          }
+        ]
+      },
+      "expected": {
+        "items": [
+          {
+            "name": "visible-0"
+          },
+          {
+            "name": "visible-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "group-in-repeater",
+      "fields": [
+        {
+          "id": "items",
+          "key": "items",
+          "type": "repeater",
+          "valueType": "object[]"
+        },
+        {
+          "id": "profile",
+          "key": "items[].profile",
+          "type": "group",
+          "valueType": "object",
+          "repeaterId": "items"
+        },
+        {
+          "id": "secret",
+          "key": "items[].profile.secret",
+          "type": "text",
+          "valueType": "string",
+          "repeaterId": "items"
+        },
+        {
+          "id": "name",
+          "key": "items[].profile.name",
+          "type": "text",
+          "valueType": "string",
+          "repeaterId": "items"
+        }
+      ],
+      "hiddenFieldIds": [
+        "secret"
+      ],
+      "values": {
+        "items": [
+          {
+            "profile": {
+              "secret": "leak",
+              "name": "visible"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "items": [
+          {
+            "profile": {
+              "name": "visible"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "repeater-in-group",
+      "fields": [
+        {
+          "id": "root",
+          "key": "root",
+          "type": "group",
+          "valueType": "object"
+        },
+        {
+          "id": "items",
+          "key": "root.items",
+          "type": "repeater",
+          "valueType": "object[]",
+          "parentId": "root"
+        },
+        {
+          "id": "secret",
+          "key": "root.items[].secret",
+          "type": "text",
+          "valueType": "string",
+          "repeaterId": "items"
+        },
+        {
+          "id": "name",
+          "key": "root.items[].name",
+          "type": "text",
+          "valueType": "string",
+          "repeaterId": "items"
+        }
+      ],
+      "hiddenFieldIds": [
+        "secret"
+      ],
+      "values": {
+        "root": {
+          "items": [
+            {
+              "secret": "leak",
+              "name": "visible"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "root": {
+          "items": [
+            {
+              "name": "visible"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "nested-repeater-template",
+      "fields": [
+        {
+          "id": "outer",
+          "key": "outer",
+          "type": "repeater",
+          "valueType": "object[]"
+        },
+        {
+          "id": "inner",
+          "key": "outer[].inner",
+          "type": "repeater",
+          "valueType": "object[]",
+          "repeaterId": "outer"
+        },
+        {
+          "id": "secret",
+          "key": "outer[].inner[].secret",
+          "type": "text",
+          "valueType": "string",
+          "repeaterId": "inner"
+        },
+        {
+          "id": "name",
+          "key": "outer[].inner[].name",
+          "type": "text",
+          "valueType": "string",
+          "repeaterId": "inner"
+        }
+      ],
+      "hiddenFieldIds": [
+        "secret"
+      ],
+      "values": {
+        "outer": [
+          {
+            "inner": [
+              {
+                "secret": "leak",
+                "name": "visible"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "outer": [
+          {
+            "inner": [
+              {
+                "name": "visible"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "hidden-parent-container",
+      "fields": [
+        {
+          "id": "profile",
+          "key": "profile",
+          "type": "group",
+          "valueType": "object"
+        },
+        {
+          "id": "secret",
+          "key": "profile.secret",
+          "type": "text",
+          "valueType": "string",
+          "parentId": "profile"
+        },
+        {
+          "id": "name",
+          "key": "name",
+          "type": "text",
+          "valueType": "string"
+        }
+      ],
+      "hiddenFieldIds": [
+        "profile"
+      ],
+      "values": {
+        "profile": {
+          "secret": "leak",
+          "other": "leak2"
+        },
+        "name": "visible"
+      },
+      "expected": {
+        "name": "visible"
+      }
+    }
+  ],
+  "unknown": [
+    {
+      "id": "root-mass-assignment",
+      "fields": [
+        {
+          "id": "name",
+          "key": "name",
+          "type": "text",
+          "valueType": "string"
+        }
+      ],
+      "values": {
+        "name": "Ada",
+        "isAdmin": true
+      },
+      "expectCodes": [
+        "UNKNOWN_PROPERTY"
+      ]
+    },
+    {
+      "id": "nested-group-property",
+      "fields": [
+        {
+          "id": "profile",
+          "key": "profile",
+          "type": "group",
+          "valueType": "object"
+        },
+        {
+          "id": "name",
+          "key": "profile.name",
+          "type": "text",
+          "valueType": "string",
+          "parentId": "profile"
+        }
+      ],
+      "values": {
+        "profile": {
+          "name": "Ada",
+          "role": "admin"
+        }
+      },
+      "expectCodes": [
+        "UNKNOWN_PROPERTY"
+      ]
+    },
+    {
+      "id": "repeater-row-property",
+      "fields": [
+        {
+          "id": "items",
+          "key": "items",
+          "type": "repeater",
+          "valueType": "object[]"
+        },
+        {
+          "id": "qty",
+          "key": "items[].qty",
+          "type": "integer",
+          "valueType": "integer",
+          "repeaterId": "items"
+        }
+      ],
+      "values": {
+        "items": [
+          {
+            "qty": 1,
+            "priceOverride": 0
+          }
+        ]
+      },
+      "expectCodes": [
+        "UNKNOWN_PROPERTY"
+      ]
+    },
+    {
+      "id": "prototype-pollution",
+      "fields": [
+        {
+          "id": "name",
+          "key": "name",
+          "type": "text",
+          "valueType": "string"
+        }
+      ],
+      "values": {
+        "name": "Ada",
+        "constructor": {
+          "polluted": true
+        }
+      },
+      "expectCodes": [
+        "UNSAFE_PROPERTY"
+      ]
+    },
+    {
+      "id": "declared-visible-ok",
+      "fields": [
+        {
+          "id": "profile",
+          "key": "profile",
+          "type": "group",
+          "valueType": "object"
+        },
+        {
+          "id": "name",
+          "key": "profile.name",
+          "type": "text",
+          "valueType": "string",
+          "parentId": "profile"
+        }
+      ],
+      "values": {
+        "profile": {
+          "name": "Ada"
+        }
+      },
+      "expectCodes": []
+    }
+  ],
+  "read": [
+    {
+      "id": "read-denied",
+      "fields": [
+        {
+          "id": "secret",
+          "key": "secret",
+          "type": "text",
+          "valueType": "string"
+        },
+        {
+          "id": "name",
+          "key": "name",
+          "type": "text",
+          "valueType": "string"
+        }
+      ],
+      "fieldAccess": {
+        "secret": {
+          "read": [
+            "secret:read"
+          ]
+        }
+      },
+      "permissions": [],
+      "rbac": true,
+      "values": {
+        "secret": "leak",
+        "name": "visible"
+      },
+      "expected": {
+        "name": "visible"
+      }
+    },
+    {
+      "id": "read-allowed",
+      "fields": [
+        {
+          "id": "secret",
+          "key": "secret",
+          "type": "text",
+          "valueType": "string"
+        },
+        {
+          "id": "name",
+          "key": "name",
+          "type": "text",
+          "valueType": "string"
+        }
+      ],
+      "fieldAccess": {
+        "secret": {
+          "read": [
+            "secret:read"
+          ]
+        }
+      },
+      "permissions": [
+        "secret:read"
+      ],
+      "rbac": true,
+      "values": {
+        "secret": "ok",
+        "name": "visible"
+      },
+      "expected": {
+        "secret": "ok",
+        "name": "visible"
+      }
+    },
+    {
+      "id": "read-unresolved-fail-closed",
+      "fields": [
+        {
+          "id": "secret",
+          "key": "secret",
+          "type": "text",
+          "valueType": "string"
+        },
+        {
+          "id": "name",
+          "key": "name",
+          "type": "text",
+          "valueType": "string"
+        }
+      ],
+      "fieldAccess": {
+        "secret": {
+          "read": [
+            "secret:read"
+          ]
+        }
+      },
+      "permissions": [
+        "secret:read"
+      ],
+      "rbac": false,
+      "values": {
+        "secret": "leak",
+        "name": "visible"
+      },
+      "expected": {
+        "name": "visible"
+      }
+    },
+    {
+      "id": "read-denied-repeater-row",
+      "fields": [
+        {
+          "id": "items",
+          "key": "items",
+          "type": "repeater",
+          "valueType": "object[]"
+        },
+        {
+          "id": "secret",
+          "key": "items[].secret",
+          "type": "text",
+          "valueType": "string",
+          "repeaterId": "items"
+        },
+        {
+          "id": "name",
+          "key": "items[].name",
+          "type": "text",
+          "valueType": "string",
+          "repeaterId": "items"
+        }
+      ],
+      "fieldAccess": {
+        "secret": {
+          "read": [
+            "secret:read"
+          ]
+        }
+      },
+      "permissions": [],
+      "rbac": true,
+      "values": {
+        "items": [
+          {
+            "secret": "leak",
+            "name": "visible"
+          }
+        ]
+      },
+      "expected": {
+        "items": [
+          {
+            "name": "visible"
+          }
+        ]
+      }
+    }
+  ]
+}

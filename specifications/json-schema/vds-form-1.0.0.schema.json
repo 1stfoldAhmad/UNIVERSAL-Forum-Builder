@@ -282,6 +282,18 @@
         }
       }
     },
+    "operationInput": {
+      "type": "object",
+      "required": ["valueType"],
+      "additionalProperties": false,
+      "properties": {
+        "valueType": { "enum": ["string", "number", "integer", "boolean", "string[]", "number[]", "object", "object[]", "asset", "asset[]", "null"] },
+        "required": { "type": "boolean" },
+        "properties": { "type": "object", "additionalProperties": { "$ref": "#/$defs/operationInput" } },
+        "items": { "$ref": "#/$defs/operationInput" },
+        "additionalProperties": { "type": "boolean" }
+      }
+    },
     "submission": {
       "type": "object",
       "required": ["operationRef"],
@@ -290,6 +302,7 @@
         "operationRef": { "$ref": "#/$defs/operationRef" },
         "operationVersion": { "type": "string", "maxLength": 32 },
         "inputMapping": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 512 } },
+        "operationInputs": { "type": "object", "additionalProperties": { "$ref": "#/$defs/operationInput" } },
         "includeHidden": { "type": "boolean" },
         "idempotency": {
           "type": "object", "required": ["strategy"], "additionalProperties": false,
@@ -306,6 +319,7 @@
             "properties": {
               "operationRef": { "$ref": "#/$defs/operationRef" },
               "inputMapping": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 512 } },
+              "operationInputs": { "type": "object", "additionalProperties": { "$ref": "#/$defs/operationInput" } },
               "condition": { "$ref": "#/$defs/expr" }
             }
           }

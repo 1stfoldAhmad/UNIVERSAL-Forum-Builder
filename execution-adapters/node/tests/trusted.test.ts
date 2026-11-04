@@ -160,7 +160,7 @@ describe('end-to-end: headless runtime → trusted Node adapter', () => {
     const compiled = compileForm(load());
     if (!compiled.ok) throw new Error('compile');
     const executors = new SubmissionExecutorRegistry();
-    executors.register(createNodeExecutor(handler, 'test'));
+    executors.register(createNodeExecutor(handler, 'test', { auth: auth(['customer:create']) }));
     const controller = new FormController({
       ir: compiled.ir, executors,
       auth: auth(['customer:create']),

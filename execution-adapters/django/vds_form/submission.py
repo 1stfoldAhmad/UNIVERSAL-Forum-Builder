@@ -27,7 +27,9 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from .expressions import get_path
-from .validation import compute_effective_state, validate_values
+from .validation import compute_effective_state, expand_field_instances, validate_values
+from .payload import build_payload
+from .policy import compute_read_policy, filter_readable_values, prepare_submission_values
 from .idempotency import (
     InMemoryIdempotencyStore, payload_fingerprint, scoped_idempotency_key,
 )
@@ -53,6 +55,22 @@ def set_in(root: Any, path: str, value: Any) -> Any:
         return obj
 
     return recur(root, 0)
+
+
+def _has_path(root: Any, path: str) -> bool:
+    cur: Any = root
+    for part in path.split("."):
+        if isinstance(cur, list):
+            if not part.isdigit() or int(part) >= len(cur):
+                return False
+            cur = cur[int(part)]
+        elif isinstance(cur, dict):
+            if part not in cur:
+                return False
+            cur = cur[part]
+        else:
+            return False
+    return True
 
 
 class OperationRegistry:
@@ -152,17 +170,26 @@ class TrustedSubmissionHandler:
             do_audit(result, operation_ref, ["FORM_VERSION_MISMATCH"])
             return result
 
-        # Reverse inputMapping to reconstruct field-keyed values.
+        # Reverse inputMapping to reconstruct field-keyed values for state, then
+        # apply the strict submission policy (unknown roots, hidden descendants,
+        # typed operation inputs) before validation/execution.
         mapping = submission.get("inputMapping")
         if mapping:
-            values: Dict[str, Any] = {}
+            raw_values: Dict[str, Any] = {}
             for param, source_path in mapping.items():
                 if param in req_values:
-                    values = set_in(values, source_path, req_values[param])
+                    raw_values = set_in(raw_values, source_path, req_values[param])
         else:
-            values = req_values
+            raw_values = req_values if isinstance(req_values, dict) else {}
 
-        state, _ = compute_effective_state(ir, values)
+        state, _ = compute_effective_state(ir, raw_values)
+        prepared = prepare_submission_values(ir, req_values, state.get("visibility", {}))
+        if prepared["issues"]:
+            issues = [{**i, "source": "server"} for i in prepared["issues"]]
+            result = {"status": "server-validation-failed", "issues": issues}
+            do_audit(result, operation_ref, [i["code"] for i in issues])
+            return result
+        values = prepared["fieldValues"]
         validation = validate_values(ir, values, state, phase="submit")
         if not validation["valid"]:
             issues = [{**i, "source": "server"} for i in validation["issues"]]
@@ -194,16 +221,28 @@ class TrustedSubmissionHandler:
             field = next((f for f in ir["fields"] if f["id"] == field_id), None)
             if field is None:
                 continue
-            provided = get_path(values, field["key"])
-            if provided is None:
-                continue
-            decision = self.rbac.evaluate(auth, write_perms) if self.rbac else {"allowed": False, "missing": write_perms}
-            if not decision["allowed"]:
-                result = {"status": "permission-denied", "code": "FIELD_WRITE_DENIED",
-                          "message": f"Not permitted to write field \"{field['key']}\".",
-                          "requiredPermissions": decision["missing"]}
-                do_audit(result, operation_ref, ["FIELD_WRITE_DENIED"])
-                return result
+            instances = [i for i in expand_field_instances(ir, values) if i["field"]["id"] == field_id]
+            paths = [i["concreteKey"] for i in instances] if instances else [field["key"]]
+            for path in paths:
+                if not _has_path(values, path):
+                    continue
+                decision = self.rbac.evaluate(auth, write_perms) if self.rbac else {"allowed": False, "missing": write_perms}
+                if not decision["allowed"]:
+                    result = {"status": "permission-denied", "code": "FIELD_WRITE_DENIED",
+                              "message": f"Not permitted to write field \"{path}\".",
+                              "requiredPermissions": decision["missing"]}
+                    do_audit(result, operation_ref, ["FIELD_WRITE_DENIED"])
+                    return result
+
+        read_policy = compute_read_policy(ir, auth, self.rbac)
+
+        payload_values = {**values, **prepared["operationInputs"]}
+        payload, payload_issues = build_payload(ir, payload_values, state, submission)
+        if any(i["severity"] == "error" for i in payload_issues):
+            issues = [{**i, "source": "server"} for i in payload_issues]
+            result = {"status": "server-validation-failed", "issues": issues}
+            do_audit(result, operation_ref, [i["code"] for i in issues])
+            return result
 
         handler = self.operations.resolve(operation_ref)
         if handler is None:
@@ -221,8 +260,11 @@ class TrustedSubmissionHandler:
         fingerprint = payload_fingerprint(req_values)
         claim = self.idempotency.claim(scope_key, fingerprint)
         if claim["kind"] == "replay":
-            do_audit(claim["result"], operation_ref, ["IDEMPOTENT_REPLAY"])
-            return claim["result"]
+            replay_result = claim["result"]
+            if replay_result.get("status") == "succeeded" and isinstance(replay_result.get("data"), dict):
+                replay_result = {**replay_result, "data": filter_readable_values(ir, replay_result["data"], read_policy["denied"])}
+            do_audit(replay_result, operation_ref, ["IDEMPOTENT_REPLAY"])
+            return replay_result
         if claim["kind"] == "conflict":
             result = {"status": "business-rejected", "code": "IDEMPOTENCY_KEY_CONFLICT",
                       "message": "This idempotency key was already used with a different payload."}
@@ -235,10 +277,12 @@ class TrustedSubmissionHandler:
             return result
 
         try:
-            data = handler(req_values, {
+            data = handler(payload, {
                 "auth": auth, "idempotencyKey": request["idempotencyKey"],
                 "correlationId": request.get("correlationId", ""), "formId": ir["formId"],
             })
+            if isinstance(data, dict):
+                data = filter_readable_values(ir, data, read_policy["denied"])
             result = {"status": "succeeded", "operationRef": operation_ref, "data": data,
                       "idempotencyKey": request["idempotencyKey"], "durationMs": int((time.time() - started) * 1000)}
         except Exception as e:  # noqa: BLE001 — operation errors become structured results
