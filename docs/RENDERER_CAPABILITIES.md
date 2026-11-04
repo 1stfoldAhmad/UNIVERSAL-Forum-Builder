@@ -57,3 +57,11 @@ All operate on the compiled `FormIR` and submit through trusted execution adapte
 The native ports are verified against the **same 62 shared expression conformance
 cases** and shared compiled IR fixtures. No native device/on-device claim is made;
 Flutter/Compose/SwiftUI evidence is CI unit/widget/compile evidence only.
+
+**Latest green run:** all seven CI jobs pass on run
+[`41925910977`](https://github.com/1stfoldAhmad/UNIVERSAL-Forum-Builder/actions/runs/41925910977)
+(`typescript`, `django`, `laravel`, `laravel13`, `flutter`, `compose`, `swiftui`).
+The `swiftui` job executes the 62-case conformance suite plus controller tests and
+builds `VdsFormUI`; the `compose` job runs `:core:test` (62 conformance + controller)
+and compiles the Material3 `:ui` module; `laravel13` boots a real Illuminate
+container on PHP 8.3 and exercises the trusted submission handler end-to-end.
