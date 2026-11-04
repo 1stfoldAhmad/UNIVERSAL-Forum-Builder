@@ -1,16 +1,17 @@
 {
     "name": "vds/form-laravel",
-    "description": "VDS Universal Form Builder — Laravel/PHP trusted execution adapter (vds.expr/1 engine, server re-validation, RBAC, idempotency, redacted audit).",
+    "description": "VDS Universal Form Builder — Laravel/PHP trusted execution adapter (vds.expr/1 engine, server re-validation, fail-closed RBAC, scoped atomic idempotency, redacted audit).",
     "type": "library",
     "license": "Apache-2.0",
     "require": {
         "php": ">=8.1"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10"
+        "illuminate/http": "^10.0 || ^11.0"
     },
     "suggest": {
-        "illuminate/http": "Required only for the LaravelController HTTP integration in a host app."
+        "illuminate/http": "Required only for the LaravelController HTTP integration in a host app.",
+        "ext-pdo_sqlite": "Enables the durable PdoIdempotencyStore reference and the durability test."
     },
     "autoload": {
         "psr-4": {
@@ -18,6 +19,14 @@
         }
     },
     "scripts": {
-        "conformance": "php tests/run-conformance.php"
+        "conformance": "php tests/run-conformance.php",
+        "test": [
+            "php tests/run-conformance.php",
+            "php tests/run-form-conformance.php",
+            "php tests/run-idempotency-parity.php",
+            "php tests/run-submission.php",
+            "php tests/run-controller.php",
+            "php tests/run-security.php"
+        ]
     }
 }

@@ -25,7 +25,9 @@ function setup(formName = 'customer-registration.vds.json') {
   return { store, operations, audit, handler };
 }
 
-const req = (values: Record<string, unknown>, over: Partial<Parameters<TrustedSubmissionHandler['handle']>[0]> = {}) => ({
+// Test convenience: build a combined {request, auth} object, then split it so
+// auth is passed as the trusted second argument (never inside the request).
+const req = (values: Record<string, unknown>, over: Record<string, unknown> = {}) => ({
   formId: 'customer-registration',
   values,
   auth: auth(['customer:create']),
@@ -33,6 +35,10 @@ const req = (values: Record<string, unknown>, over: Partial<Parameters<TrustedSu
   correlationId: 'corr-1',
   ...over,
 });
+const send = (handler: TrustedSubmissionHandler, combined: Record<string, unknown>) => {
+  const { auth: a, ...request } = combined;
+  return handler.handle(request as never, a as AuthContext | undefined);
+};
 
 const validPayload = {
   name: 'Ada Lovelace', email: 'ada@example.com', type: 'individual', consent: true,
@@ -41,7 +47,7 @@ const validPayload = {
 describe('trusted Node execution adapter', () => {
   it('executes a registered operation and persists a real record', async () => {
     const { handler, store } = setup();
-    const r = await handler.handle(req(validPayload));
+    const r = await send(handler, req(validPayload));
     expect(r.status).toBe('succeeded');
     expect(store.list('customer').length).toBe(1);
     expect(store.list('customer')[0]).toMatchObject({ name: 'Ada Lovelace', email: 'ada@example.com' });
@@ -49,7 +55,7 @@ describe('trusted Node execution adapter', () => {
 
   it('re-validates server-side: missing required fields rejected even if client skipped', async () => {
     const { handler, store } = setup();
-    const r = await handler.handle(req({ name: 'Ada' }));
+    const r = await send(handler, req({ name: 'Ada' }));
     expect(r.status).toBe('server-validation-failed');
     if (r.status === 'server-validation-failed') {
       expect(r.issues.every((i) => i.source === 'server')).toBe(true);
@@ -60,18 +66,18 @@ describe('trusted Node execution adapter', () => {
 
   it('enforces conditional required rules identically to the client', async () => {
     const { handler } = setup();
-    const r = await handler.handle(req({ ...validPayload, type: 'business' }));
+    const r = await send(handler, req({ ...validPayload, type: 'business' }));
     expect(r.status).toBe('server-validation-failed');
     if (r.status === 'server-validation-failed') {
       expect(r.issues.some((i) => i.path === 'customer.companyName' && i.code === 'REQUIRED')).toBe(true);
     }
-    const ok = await handler.handle(req({ ...validPayload, type: 'business', companyName: 'Analytical Engines Ltd' }));
+    const ok = await send(handler, req({ ...validPayload, type: 'business', companyName: 'Analytical Engines Ltd' }));
     expect(ok.status).toBe('succeeded');
   });
 
   it('denies submission without required permissions (fail closed)', async () => {
     const { handler, store } = setup();
-    const r = await handler.handle(req(validPayload, { auth: auth([]) }));
+    const r = await send(handler, req(validPayload, { auth: auth([]) }));
     expect(r).toMatchObject({ status: 'permission-denied', code: 'PERMISSION_DENIED' });
     expect(store.list('customer').length).toBe(0);
   });
@@ -80,7 +86,7 @@ describe('trusted Node execution adapter', () => {
     const operations = new OperationRegistry();
     operations.register('test:customer.create', () => ({}));
     const handler = new TrustedSubmissionHandler({ forms: { 'customer-registration': load() }, operations });
-    const r = await handler.handle(req(validPayload));
+    const r = await send(handler, req(validPayload));
     expect(r).toMatchObject({ status: 'permission-denied', code: 'RBAC_NOT_CONFIGURED' });
   });
 
@@ -91,7 +97,7 @@ describe('trusted Node execution adapter', () => {
     const handler = new TrustedSubmissionHandler({
       forms: { 'purchase-approval': doc }, operations, rbac: new SimpleRbacEvaluator(),
     });
-    const r = await handler.handle({
+    const r = await send(handler, {
       formId: 'purchase-approval',
       values: { request: { item: 'Laptop', amount: 1500, department: 'eng', justification: 'Required for new hire onboarding process.' } },
       auth: auth([]), idempotencyKey: 'k1', correlationId: 'c1',
@@ -101,8 +107,8 @@ describe('trusted Node execution adapter', () => {
 
   it('idempotent replay returns the recorded result without re-execution', async () => {
     const { handler, store } = setup();
-    const r1 = await handler.handle(req(validPayload, { idempotencyKey: 'fixed-key' }));
-    const r2 = await handler.handle(req(validPayload, { idempotencyKey: 'fixed-key' }));
+    const r1 = await send(handler, req(validPayload, { idempotencyKey: 'fixed-key' }));
+    const r2 = await send(handler, req(validPayload, { idempotencyKey: 'fixed-key' }));
     expect(r1.status).toBe('succeeded');
     expect(r2).toEqual(r1);
     expect(store.list('customer').length).toBe(1); // not duplicated
@@ -110,22 +116,22 @@ describe('trusted Node execution adapter', () => {
 
   it('unknown operations and forms fail explicitly', async () => {
     const { handler } = setup();
-    const r = await handler.handle(req(validPayload, { operationRef: 'test:not.registered' }));
-    expect(r).toMatchObject({ status: 'config-error', code: 'SUBMISSION_OPERATION_UNRESOLVED' });
-    const r2 = await handler.handle(req(validPayload, { formId: 'ghost-form' }));
+    const r = await send(handler, req(validPayload, { operationRef: 'test:not.registered' }));
+    expect(r).toMatchObject({ status: 'permission-denied', code: 'OPERATION_OVERRIDE_FORBIDDEN' });
+    const r2 = await send(handler, req(validPayload, { formId: 'ghost-form' }));
     expect(r2.status).toBe('config-error');
   });
 
   it('rejects outdated form versions', async () => {
     const { handler } = setup();
-    const r = await handler.handle(req(validPayload, { formVersion: '0.0.1' }));
+    const r = await send(handler, req(validPayload, { formVersion: '0.0.1' }));
     expect(r.status).toBe('server-validation-failed');
     if (r.status === 'server-validation-failed') expect(r.issues[0].code).toBe('FORM_VERSION_MISMATCH');
   });
 
   it('audit entries never contain submitted values', async () => {
     const { handler, audit } = setup();
-    await handler.handle(req(validPayload));
+    await send(handler, req(validPayload));
     expect(audit.length).toBe(1);
     const serialized = JSON.stringify(audit);
     expect(serialized).not.toContain('Ada Lovelace');
@@ -138,7 +144,7 @@ describe('trusted Node execution adapter', () => {
     const operations = new OperationRegistry();
     operations.register('test:customer.create', () => { throw { code: 'DUPLICATE_EMAIL', message: 'Email already exists.' }; });
     const handler = new TrustedSubmissionHandler({ forms: { 'customer-registration': load() }, operations, rbac: new SimpleRbacEvaluator() });
-    const r = await handler.handle(req(validPayload));
+    const r = await send(handler, req(validPayload));
     expect(r).toMatchObject({ status: 'business-rejected', code: 'DUPLICATE_EMAIL' });
   });
 

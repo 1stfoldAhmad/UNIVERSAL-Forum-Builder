@@ -4,19 +4,21 @@ Status labels: `not-started` · `in-progress` · `implemented` · `verified` · 
 A row is **verified** only when its acceptance criteria passed via the recorded command.
 Final narrative audit: `docs/FINAL_IMPLEMENTATION_AUDIT.md`.
 
-Last updated: 2026-11-04 (Phases 0–12 complete; Laravel/native renderers environment-blocked)
+Last updated: 2026-11-04 (P0/P1 security corrections implemented + verified on `arena/65a47b1c-universal-forum-builder`; see `docs/audit/SECURITY_FIXES_2026-11-04.md`)
 
 ## Test totals (actual, this sandbox)
 
 | Suite | Command | Result |
 |---|---|---|
-| TypeScript (all projects) | `npx vitest run` | **216 / 216 pass** (18 files) |
-| — core | `npx vitest run --project core` | 181 pass |
+| TypeScript (all projects) | `npx vitest run` | **234 / 234 pass** (20 files) |
+| — core | `npx vitest run --project core` | 199 pass |
 | — native (Expo via RN-web) | `npx vitest run --project native` | 9 pass |
 | — web (React/Vue/demo) | `npx vitest run --project web` | 18 pass |
 | — angular (JIT) | `npx vitest run --project angular` | 8 pass |
-| Django/Python adapter | `cd execution-adapters/django && python3 -m pytest -q` | **20 / 20 pass** |
+| Django/Python adapter | `cd execution-adapters/django && python3 -m pytest -q` | **42 / 42 pass** |
+| Laravel/PHP adapter (PHP-WASM 8.2) | `node execution-adapters/laravel/tests/run-wasm.mjs` | **155 / 155 pass** (6 suites) |
 | Cross-language conformance | `npx tsx tools/cli/src/bin.ts conformance` | **73 / 73 pass** |
+| Idempotency parity (TS/Python/PHP) | shared `fixtures/idempotency.json` | byte-identical in all 3 |
 | Benchmarks | `npm run bench` | runs; `benchmarks/RESULTS.md` |
 
 ## Acceptance-criteria tracker (spec §30)
@@ -36,17 +38,17 @@ Last updated: 2026-11-04 (Phases 0–12 complete; Laravel/native renderers envir
 | R11 | Submission delegates to registered real operations | verified | `form-submission` + Node/Django trusted handlers; runtime→Node e2e test |
 | R12 | Missing executors → explicit errors | verified | `SUBMISSION_EXECUTOR_NOT_REGISTERED` / `SUBMISSION_OPERATION_UNRESOLVED`; tested |
 | R13 | Database/API integrate via their own VDS contracts | implemented | No public VDS Database/API Builder source (Phase 0). Real provider contracts + explicitly-named TEST adapters (`integrations/vds-contracts`); host registers production operations. Production wiring **blocked** on unavailable VDS source |
-| R14 | Auth/RBAC enforced by trusted execution | verified | Fail-closed RBAC in Node + Django handlers; `RBAC_NOT_CONFIGURED`/`PERMISSION_DENIED`/`FIELD_WRITE_DENIED`; security suite |
+| R14 | Auth/RBAC enforced by trusted execution | verified | Fail-closed RBAC in Node + Django + Laravel handlers; identity is a **server-derived trusted argument, never from the request body** (body `auth` → `AUTH_IN_BODY_FORBIDDEN`); `RBAC_NOT_CONFIGURED`/`PERMISSION_DENIED`/`FIELD_WRITE_DENIED`; adversarial forgery tests in all 3 adapters |
 | R15 | Storage/uploads via registered providers | verified | `UploadProvider` contract; drag-drop in React/Vue/Angular/Expo; `TestUploadProvider`; asset guards |
 | R16 | Workflow integration uses Workflow Builder | verified | Real `vds-json-logic` engine vendored; `logic:`/`workflow:` executors (`integrations/vds-logic`, 7 tests) |
 | R17 | Draft persistence + approved offline queue | verified | `form-persistence`; version-checked drafts; offline queue gated by contract; runtime tests |
 | R18 | Expo rendering verified | verified | `adapters/expo` 9 tests via RN-web/jsdom; capability negotiation. **On-device** verification not possible in sandbox (documented) |
 | R19 | React/Angular/Vue renderers verified | verified | React 8, Vue 7, Angular 8 tests; live React preview app (3 e2e tests) |
 | R20 | Flutter/Compose/SwiftUI at declared conformance | blocked | No Dart/Kotlin/Swift toolchains or distribution hosts (ADR-0006). Not started; documented unsupported-in-sandbox |
-| R21 | Node/Django/Laravel equivalent contract tests | implemented | Node 13 tests **verified**; Django 20 tests **verified** (same shared fixtures); Laravel PHP port **implemented-not-verified** (no PHP runtime in sandbox) |
+| R21 | Node/Django/Laravel equivalent contract tests | verified | Node 31 tests **verified**; Django 42 tests **verified**; Laravel 155 checks across 6 suites **verified** (PHP-WASM 8.2 locally; real PHP 8.2 + illuminate/http in CI). All three share the same expression/form/idempotency fixtures |
 | R22 | AI/MCP/Plugin Host tools permission-controlled | verified | `tools/mcp-server` 10 tests; fail-closed host-granted permissions; 6 contract-backed tools. VDS Plugin-Host source unavailable → standalone MCP (no invented VDS APIs) |
 | R23 | Migrations tested | verified | `form-migrations` 6 tests; BFS path, backup, allowLossy; `vds-form migrate` |
-| R24 | Security tests pass | verified | `tests/security.test.ts` 18 tests: pollution, no-eval, ReDoS, budgets, redaction, payload hygiene, fail-closed RBAC |
+| R24 | Security tests pass | verified | Core `tests/security.test.ts` 18 tests (pollution, no-eval, ReDoS, budgets, redaction, payload hygiene, fail-closed RBAC) **plus** adversarial adapter suites: Node 15, Django 14, PHP 34 — forged auth, operation override/allowlist, cross-principal/tenant idempotency isolation, payload-swap conflict, concurrent double-execution, durable restart replay, authorization-before-replay |
 | R25 | Accessibility/localization contracts implemented | verified | aria-* + label association (React/Angular tests); `localize` + locale fallback; capability manifests |
 | R26 | Examples installable/runnable | verified | `examples/react-app` builds (`vite build`, 248 modules) + live server; headless-node example; 9 canonical forms |
 | R27 | Documentation matches implementation | verified | This ledger + `FINAL_IMPLEMENTATION_AUDIT.md` + ADRs + per-package READMEs |
@@ -74,9 +76,9 @@ Last updated: 2026-11-04 (Phases 0–12 complete; Laravel/native renderers envir
 | Conformance fixtures + runner | `packages/form-conformance` | verified | 5 (73 cases) | `vds-form conformance` | 73/73 |
 | VDS logic/workflow integration | `integrations/vds-logic` | verified | 7 | `vitest run --project core integrations/vds-logic` | pass |
 | VDS provider contracts + TEST adapters | `integrations/vds-contracts` | implemented | (via consumers) | node/react/django | pass |
-| Node trusted execution | `execution-adapters/node` | verified | 13 | `vitest run --project core execution-adapters/node` | pass |
-| Django trusted execution | `execution-adapters/django` | verified | 20 | `python3 -m pytest -q` | 20/20 |
-| Laravel trusted execution | `execution-adapters/laravel` | implemented-not-verified | (PHP port) | `php tests/run-conformance.php` | not run (no PHP) |
+| Node trusted execution | `execution-adapters/node` | verified | 31 | `vitest run --project core execution-adapters/node` | 31/31 |
+| Django trusted execution | `execution-adapters/django` | verified | 42 | `python3 -m pytest -q` | 42/42 |
+| Laravel trusted execution | `execution-adapters/laravel` | verified | 155 (6 suites) | `composer test` (CI) / `node tests/run-wasm.mjs` (local) | 155/155 |
 | Expo renderer | `adapters/expo` | verified | 9 | `vitest run --project native` | pass |
 | React renderer | `adapters/react` | verified | 8 | `vitest run --project web` | pass |
 | Vue renderer | `adapters/vue` | verified | 7 | `vitest run --project web` | pass |
@@ -92,7 +94,7 @@ Last updated: 2026-11-04 (Phases 0–12 complete; Laravel/native renderers envir
 
 ## Environment limitations (this sandbox)
 
-- No PHP/Composer → Laravel adapter is a faithful PHP port, **implemented-not-verified** (cannot execute).
+- No native PHP/Composer → Laravel adapter verified locally under **PHP-WASM 8.2** (`tests/run-wasm.mjs`, 155 checks). CI runs the same suites on a **real PHP 8.2** toolchain with `illuminate/http` (real-Request integration) and `pdo_sqlite` (durability). `@php-wasm/node` is GPL-2.0 and intentionally not a committed dependency.
 - No Dart/Flutter, Kotlin/Gradle, Swift/Xcode/Android SDK → Flutter/Compose/SwiftUI **blocked / not started** (ADR-0006).
 - No physical Expo device → Expo verified via react-native-web + jsdom; on-device run is a documented release task.
 - No public VDS Database/API/Storage/Notification/Plugin-Host builder repos → integration via real contracts + explicitly-named TEST adapters; production wiring blocked on unavailable source (Phase 0 audit).
