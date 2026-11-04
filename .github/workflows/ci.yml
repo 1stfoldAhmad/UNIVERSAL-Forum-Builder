@@ -96,6 +96,7 @@ jobs:
       - name: Run real Laravel 13 integration check
         run: |
           cd adapters/laravel
+          set +e
           php tests/run-laravel13.php > /tmp/l13.log 2>&1
           code=$?
           cat /tmp/l13.log
@@ -133,6 +134,7 @@ jobs:
       - name: Core tests (62-case expression conformance + controller)
         run: |
           cd adapters/compose
+          set +e
           gradle :core:test --no-daemon --console=plain > /tmp/core.log 2>&1
           code=$?
           tail -80 /tmp/core.log
@@ -141,6 +143,7 @@ jobs:
       - name: Compose UI compile evidence
         run: |
           cd adapters/compose
+          set +e
           gradle :ui:compileDebugKotlin --no-daemon --console=plain > /tmp/ui.log 2>&1
           code=$?
           tail -80 /tmp/ui.log
@@ -157,6 +160,7 @@ jobs:
       - name: Swift test (62-case expression conformance + controller; builds VdsFormUI)
         run: |
           cd adapters/swiftui
+          set +e
           swift test > /tmp/swift.log 2>&1
           code=$?
           tail -80 /tmp/swift.log
