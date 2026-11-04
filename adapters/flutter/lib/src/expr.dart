@@ -191,7 +191,7 @@ ExprResult _apply(String op, List<Object?> a, Map<String, int> limits) {
     case 'mod':
       if (!isNum(a[0]) || !isNum(a[1])) return const ExprResult.err('EXPR_TYPE_ERROR', 'mod expects numbers.');
       if (a[1] == 0) return const ExprResult.err('EXPR_DIVISION_BY_ZERO', 'Modulo by zero.');
-      return _finite((a[0] as num) % (a[1] as num));
+      return _finite((a[0] as num).remainder(a[1] as num));
     case 'abs': return isNum(a[0]) ? ExprResult.ok((a[0] as num).abs()) : const ExprResult.err('EXPR_TYPE_ERROR', 'abs expects a number.');
     case 'round':
       if (!isNum(a[0])) return const ExprResult.err('EXPR_TYPE_ERROR', 'round expects a number.');
