@@ -18,11 +18,42 @@ import type { EvalResult } from '@vds-form/expressions';
 
 export const PLUGIN_CONTRACT_VERSION = '1.0.0';
 
+/** Platform-specific renderer component registration. `component` is opaque to
+ * the plugin host (React/Vue/Angular/Expo component); the target renderer owns
+ * how it is mounted. Manifest name convention: `${target}:${fieldType}`. */
+export interface RendererComponentRegistration {
+  target: string;
+  fieldType: string;
+  component: unknown;
+}
+
+/** Closed registry for custom plugin field renderers. Registration does NOT
+ * advertise renderer capabilities or imply sandbox isolation; hosts still
+ * negotiate capabilities and only trusted code is accepted. */
+export class RendererComponentRegistry {
+  private components = new Map<string, RendererComponentRegistration>();
+  private key(target: string, fieldType: string) { return `${target}:${fieldType}`; }
+  register(reg: RendererComponentRegistration): void {
+    if (!reg.target || !reg.fieldType) throw new Error('RENDERER_REGISTRATION_INVALID: target and fieldType are required.');
+    if (reg.component === null || reg.component === undefined) throw new Error('RENDERER_REGISTRATION_INVALID: component is required.');
+    const key = this.key(reg.target, reg.fieldType);
+    if (this.components.has(key)) throw new Error(`RENDERER_REGISTRATION_DUPLICATE: ${key} already registered.`);
+    this.components.set(key, { ...reg });
+  }
+  unregister(target: string, fieldType: string): boolean { return this.components.delete(this.key(target, fieldType)); }
+  get(target: string, fieldType: string): RendererComponentRegistration | undefined {
+    return this.components.get(this.key(target, fieldType)) ?? this.components.get(this.key('*', fieldType));
+  }
+  has(target: string, fieldType: string): boolean { return this.get(target, fieldType) !== undefined; }
+  list(): RendererComponentRegistration[] { return [...this.components.values()].map((r) => ({ ...r })); }
+}
+
 export interface PluginRegistrations {
   fields?: FieldContract[];
   executors?: SubmissionExecutor[];
   dataProviders?: DataSourceProvider[];
   expressionFunctions?: Record<string, (args: unknown[]) => EvalResult>;
+  rendererComponents?: RendererComponentRegistration[];
 }
 
 export interface RegisteredPlugin {
@@ -48,6 +79,7 @@ export interface PluginHostOptions {
   fields?: FieldRegistry;
   executors?: SubmissionExecutorRegistry;
   dataProviders?: DataSourceProviderRegistry;
+  renderers?: RendererComponentRegistry;
   /** Permissions granted by the host (plugins never self-grant). */
   grantedPermissions?: string[];
   /** Optional per-plugin grants. When present for a plugin id, these replace
@@ -164,6 +196,17 @@ export class PluginHost {
         return { ok: false, error: { code: 'PLUGIN_REGISTRATION_DUPLICATE', message: `Expression function "${name}" already registered.` } };
       }
     }
+    for (const rc of registrations.rendererComponents ?? []) {
+      const un = checkDeclared('rendererComponent', `${rc.target}:${rc.fieldType}`);
+      if (un) return { ok: false, error: un };
+      if (!this.options.renderers) return { ok: false, error: { code: 'PLUGIN_REGISTRY_MISSING', message: 'Renderer registrations require a RendererComponentRegistry.' } };
+      if (this.options.target && rc.target !== '*' && rc.target !== this.options.target) {
+        return { ok: false, error: { code: 'PLUGIN_CONTRACT_INCOMPATIBLE', message: `Renderer component targets "${rc.target}", host target is "${this.options.target}".` } };
+      }
+      if (this.options.renderers.has(rc.target, rc.fieldType)) {
+        return { ok: false, error: { code: 'PLUGIN_REGISTRATION_DUPLICATE', message: `Renderer component "${rc.target}:${rc.fieldType}" already registered.` } };
+      }
+    }
 
     // Apply transactionally; rollback on any registry failure.
     const undo: Array<() => void> = [];
@@ -183,6 +226,10 @@ export class PluginHost {
       for (const [name, fn] of Object.entries(registrations.expressionFunctions ?? {})) {
         this.expressionFunctions[name] = fn;
         undo.push(() => { delete this.expressionFunctions[name]; });
+      }
+      for (const rc of registrations.rendererComponents ?? []) {
+        this.options.renderers!.register(rc);
+        undo.push(() => this.options.renderers!.unregister(rc.target, rc.fieldType));
       }
     } catch (e) {
       for (const u of undo.reverse()) u();
@@ -221,6 +268,7 @@ export class PluginHost {
       for (const e of p.registrations.executors ?? []) this.options.executors?.unregister(e.scheme);
       for (const dp of p.registrations.dataProviders ?? []) this.options.dataProviders?.unregister(dp.scheme);
       for (const name of Object.keys(p.registrations.expressionFunctions ?? {})) delete this.expressionFunctions[name];
+      for (const rc of p.registrations.rendererComponents ?? []) this.options.renderers?.unregister(rc.target, rc.fieldType);
       this.plugins.delete(id);
     }
     return { ok: true, removed: order };

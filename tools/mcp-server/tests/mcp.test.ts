@@ -102,3 +102,28 @@ describe('MCP server (permission-gated form tools)', () => {
     expect(body.formId).toBe('contact');
   });
 });
+
+describe('MCP migration input diagnostics', () => {
+  it('denies migrate without form:migrate permission', async () => {
+    const client = await connect([]);
+    const result = await client.callTool({ name: 'migrate_form', arguments: { document: contact } });
+    expect(result.isError).toBe(true);
+    expect(parse(result).code).toBe('MCP_PERMISSION_DENIED');
+  });
+
+  it('returns structured diagnostics for malformed JSON migration input', async () => {
+    const client = await connect(['form:migrate']);
+    const result = await client.callTool({ name: 'migrate_form', arguments: { document: '{bad json' } });
+    expect(result.isError).toBe(true);
+    const body = parse(result);
+    expect(body.ok).toBe(false);
+    expect(body.diagnostics[0].code).toBe('MCP_INPUT_INVALID');
+  });
+
+  it('returns structured diagnostics for non-object migration input', async () => {
+    const client = await connect(['form:migrate']);
+    const result = await client.callTool({ name: 'migrate_form', arguments: { document: '[]' } });
+    expect(result.isError).toBe(true);
+    expect(parse(result).diagnostics[0].code).toBe('MCP_INPUT_INVALID');
+  });
+});
