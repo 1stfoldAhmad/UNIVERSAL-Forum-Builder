@@ -59,7 +59,9 @@ public final class FormController {
             let min = ((f["validation"] as? [String: Any])?["minItems"] as? NSNumber ?? f["minItems"] as? NSNumber ?? NSNumber(value: 0)).intValue
             while list.count < min { list.append([String: Any]()) }
             values = Validation.setIn(values, f["key"] as! String, list)
-            repeaterRows[f["id"] as! String] = (0..<list.count).map { _ in let id = "row-\(rowSeq)"; rowSeq += 1; return id }
+            var ids: [String] = []
+            for _ in 0..<list.count { ids.append("row-\(rowSeq)"); rowSeq += 1 }
+            repeaterRows[f["id"] as! String] = ids
         }
         recompute()
     }

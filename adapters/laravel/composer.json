@@ -3,6 +3,8 @@
     "description": "VDS Universal Form Builder — Laravel 13 server-rendered form renderer (shared HTML contract + trusted submission).",
     "type": "library",
     "license": "Apache-2.0",
+    "minimum-stability": "dev",
+    "prefer-stable": true,
     "repositories": [
         { "type": "path", "url": "../../execution-adapters/laravel", "options": { "symlink": true } }
     ],

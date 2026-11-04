@@ -56,7 +56,7 @@ public struct VdsFormView: View {
         let idx = min(max(c.stepIndex, 0), max(steps.count - 1, 0))
         let current = steps.isEmpty ? [:] : steps[idx]
         VStack(alignment: .leading) {
-            ProgressView(value: steps.isEmpty ? 0 : Double(idx + 1) / Double(steps.count))
+            ProgressView(value: steps.isEmpty ? 0.0 : Double(idx + 1) / Double(steps.count))
             Text(Validation.localize(current["title"], c.locale).isEmpty ? "Step \(idx + 1)" : Validation.localize(current["title"], c.locale)).font(.headline)
             layout(current.merging(["type": "section" as Any]) { _, new in new })
             HStack {

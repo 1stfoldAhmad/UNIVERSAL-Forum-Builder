@@ -276,8 +276,12 @@ public enum Expressions {
         case "index":
             guard let i = scope["rowIndex"] else { return .err("EXPR_SCOPE_ERROR", "index reference used outside a repeater row.") }
             return .ok(i)
-        case "context": return .ok(getPath(scope["context"] ?? [String: Any](), path))
-        case "source": return .ok((scope["sources"] as? [String: Any])?[path])
+        case "context":
+            let ctx = (scope["context"] as? [String: Any]) ?? [:]
+            return .ok(getPath(ctx, path))
+        case "source":
+            let src = (scope["sources"] as? [String: Any]) ?? [:]
+            return .ok(src[path])
         default: return .err("EXPR_REFERENCE_INVALID", "Invalid reference \"\(ref)\".")
         }
     }
