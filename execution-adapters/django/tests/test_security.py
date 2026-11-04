@@ -173,6 +173,22 @@ def test_forged_auth_in_request_ignored():
     assert calls == []
 
 
+def test_forged_identity_fields_never_honored():
+    # Forge EVERY identity field; the operation must see only the server principal.
+    seen = {}
+    ops = OperationRegistry()
+    ops.register("test:contact.create", lambda p, c: seen.update(c["auth"] or {}) or {"id": "rec-1"})
+    handler = TrustedSubmissionHandler({"contact": gated_ir()}, ops, rbac=SimpleRbacEvaluator())
+    forged = req()
+    forged["auth"] = {"userId": "attacker", "tenantId": "evil-tenant", "roles": ["admin"], "permissions": ["*"]}
+    server_principal = {"userId": "real-user", "tenantId": "real-tenant", "roles": ["member"], "permissions": ["contact:create"]}
+    r = handler.handle(forged, server_principal)
+    assert r["status"] == "succeeded"
+    assert seen == server_principal
+    assert seen["userId"] == "real-user" and seen["tenantId"] == "real-tenant"
+    assert seen["roles"] == ["member"] and seen["permissions"] == ["contact:create"]
+
+
 # ---- Canonical determinism (cross-language parity) ----
 
 def test_canonical_json_key_order_independent():

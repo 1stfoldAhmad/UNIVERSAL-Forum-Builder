@@ -91,15 +91,15 @@ vectors avoid the ambiguous case.
 
 | Suite | Command | Result |
 |---|---|---|
-| TypeScript (all projects) | `npx vitest run` | **233 / 233** (20 files) |
+| TypeScript (all projects) | `npx vitest run` | **234 / 234** (20 files) |
 | TypeScript typecheck | `npx tsc --noEmit` | **0 errors** |
-| Node adapter | `npx vitest run --project core execution-adapters/node` | **30 / 30** (13 trusted + 14 security + 3 parity) |
-| Django adapter | `cd execution-adapters/django && python3 -m pytest -q` | **41 / 41** |
-| Laravel adapter (PHP-WASM 8.2) | `node execution-adapters/laravel/tests/run-wasm.mjs` | **153 / 153** (6 suites) |
+| Node adapter | `npx vitest run --project core execution-adapters/node` | **31 / 31** (13 trusted + 15 security + 3 parity) |
+| Django adapter | `cd execution-adapters/django && python3 -m pytest -q` | **42 / 42** |
+| Laravel adapter (PHP-WASM 8.2) | `node execution-adapters/laravel/tests/run-wasm.mjs` | **155 / 155** (6 suites) |
 | Cross-language conformance | `npx tsx tools/cli/src/bin.ts conformance` | **73 / 73** |
 
 PHP suite breakdown: expression conformance 62, form conformance 7, idempotency
-parity 7, trusted handler 25, controller auth boundary 20, adversarial security 32.
+parity 7, trusted handler 25, controller auth boundary 20, adversarial security 34.
 
 ### 3.1 Adversarial tests added (per adapter)
 
@@ -107,6 +107,9 @@ Each adapter now proves, with a failing-before/passing-after test:
 
 - **Forged auth** — a wildcard `auth` in the request body is rejected (HTTP) or
   inert (direct handler); the server principal with no permissions is denied.
+  A dedicated test forges **all four identity fields** (`userId`, `tenantId`,
+  `roles`, `permissions`) and asserts the operation receives the *server*
+  principal verbatim — no forged field leaks (Node, Django, and PHP).
 - **Operation override** — requesting a second *registered but unauthorized*
   operation is rejected and that operation never executes.
 - **Operation allowlist** — a non-member operation is denied.
@@ -133,6 +136,12 @@ suite exercises a **real `Illuminate\Http\Request`** when available (it is, in
 CI), proving the HTTP auth boundary end-to-end. Locally (no native PHP) the same
 suites run under PHP-WASM 8.2 via `tests/run-wasm.mjs`; `@php-wasm/node` is
 GPL-2.0 and intentionally **not** a committed dependency.
+
+To make this verification **definitive rather than optional**, CI sets
+`VDS_REQUIRE_ILLUMINATE=1` and `VDS_REQUIRE_PDO_SQLITE=1`: the controller and
+security runners **fail** if the real-Request integration or the durable-restart
+check would be skipped. Both gates were verified to fail when the dependency is
+absent and pass when present, so CI cannot silently downgrade to the skip path.
 
 ## 4. Breaking changes
 

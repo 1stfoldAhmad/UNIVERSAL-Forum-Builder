@@ -173,6 +173,26 @@ describe('security: client-supplied auth is never trusted (audit finding 1)', ()
     expect(r).toMatchObject({ status: 'permission-denied', code: 'PERMISSION_DENIED' });
     expect(calls).toEqual([]);
   });
+
+  it('never honors forged userId, tenantId, roles, or permissions — the operation sees only the server principal', async () => {
+    let seen: AuthContext | undefined;
+    const operations = new OperationRegistry();
+    operations.register('test:customer.create', (_p, ctx) => { seen = ctx.auth; return { id: 'rec-1' }; });
+    const handler = new TrustedSubmissionHandler({
+      forms: { 'customer-registration': load() }, operations, rbac: new SimpleRbacEvaluator(),
+    });
+    // Client forges EVERY identity field, including a wildcard grant and admin role.
+    const forged = { ...baseReq(), auth: { userId: 'attacker', tenantId: 'evil-tenant', roles: ['admin'], permissions: ['*'] } };
+    const serverPrincipal: AuthContext = { userId: 'real-user', tenantId: 'real-tenant', roles: ['member'], permissions: ['customer:create'] };
+    const r = await handler.handle(forged as never, serverPrincipal);
+    expect(r.status).toBe('succeeded');
+    // The operation received the SERVER principal verbatim — no forged field leaked.
+    expect(seen).toEqual(serverPrincipal);
+    expect(seen?.userId).toBe('real-user');
+    expect(seen?.tenantId).toBe('real-tenant');
+    expect(seen?.roles).toEqual(['member']);
+    expect(seen?.permissions).toEqual(['customer:create']);
+  });
 });
 
 describe('idempotency helpers: canonical determinism', () => {

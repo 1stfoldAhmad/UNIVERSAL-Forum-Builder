@@ -8,8 +8,8 @@ Status labels: **Verified** · **Implemented-not-verified** · **Partial** · **
 > trusted execution adapters (forged body-supplied auth, client operation
 > override, unsafe idempotency, and an unverified Laravel adapter). All are now
 > **fixed and verified** — see `docs/audit/SECURITY_FIXES_2026-11-04.md`.
-> Superseding results: TypeScript **233/233** (20 files), Django **41/41**,
-> Laravel **153/153** across 6 suites (now **Verified**, not
+> Superseding results: TypeScript **234/234** (20 files), Django **42/42**,
+> Laravel **155/155** across 6 suites (now **Verified**, not
 > implemented-not-verified), cross-language idempotency parity byte-identical in
 > TS/Python/PHP. The sections below are updated accordingly; the original
 > Phases 0–13 narrative is retained for history.
@@ -38,9 +38,9 @@ derive identity exclusively from server-side auth, bind the operation to the
 compiled FormIR, and use scoped, atomic, fingerprinted idempotency.
 
 **Actual test results in this sandbox (post-security-fix):**
-- TypeScript: **233 / 233 pass** across 20 files (core 198, native/Expo 9, web 18, angular 8).
-- Django/Python: **41 / 41 pass**.
-- Laravel/PHP: **153 / 153 pass** across 6 suites (PHP-WASM 8.2).
+- TypeScript: **234 / 234 pass** across 20 files (core 199, native/Expo 9, web 18, angular 8).
+- Django/Python: **42 / 42 pass**.
+- Laravel/PHP: **155 / 155 pass** across 6 suites (PHP-WASM 8.2).
 - Cross-language conformance: **73 / 73 pass** (62 expression + 11 compiler/validation/payload cases).
 - Idempotency parity: canonical JSON / SHA-256 fingerprint / scoped key byte-identical in TS, Python, PHP.
 - The Python engine independently passes the **same 62 expression fixtures** and the validation/payload cases via the shared compiled IR.
@@ -82,9 +82,9 @@ Shared contracts: `@vds-form/types`, `form-spec`, `form-expressions`,
 | Flutter renderer | **Blocked / Not started** | No Dart/Flutter toolchain (ADR-0006). |
 | Jetpack Compose renderer | **Blocked / Not started** | No Kotlin/Gradle/Android SDK (ADR-0006). |
 | SwiftUI renderer | **Blocked / Not started** | No Swift/Xcode (ADR-0006). |
-| Node execution adapter | **Verified** | `execution-adapters/node` 30 tests incl. runtime→Node e2e + 14 adversarial security + 3 idempotency-parity. |
-| Django execution adapter | **Verified** | `execution-adapters/django` 41 tests; engine passes shared fixtures; real Django `RequestFactory` view tests. |
-| Laravel execution adapter | **Verified** | 153 checks across 6 suites (expression/form conformance, idempotency parity, trusted handler, controller auth boundary, adversarial security). PHP-WASM 8.2 locally; real PHP 8.2 + illuminate/http + pdo_sqlite in CI. |
+| Node execution adapter | **Verified** | `execution-adapters/node` 31 tests incl. runtime→Node e2e + 15 adversarial security + 3 idempotency-parity. |
+| Django execution adapter | **Verified** | `execution-adapters/django` 42 tests; engine passes shared fixtures; real Django `RequestFactory` view tests. |
+| Laravel execution adapter | **Verified** | 155 checks across 6 suites (expression/form conformance, idempotency parity, trusted handler, controller auth boundary, adversarial security). PHP-WASM 8.2 locally; real PHP 8.2 + illuminate/http + pdo_sqlite in CI. |
 | Headless Node example | **Verified** | `examples/headless-node` tests. |
 | Live React preview | **Verified** | builds + serves on 0.0.0.0; proxy-host allowed. |
 
@@ -136,11 +136,11 @@ Full machine-readable tracker: `docs/IMPLEMENTATION_STATUS.md`.
 ## 6. Exact verification commands & actual results
 
 ```bash
-# TypeScript — all renderers + core + tools (result: 233/233 pass)
+# TypeScript — all renderers + core + tools (result: 234/234 pass)
 npx vitest run
 
 # Per-project
-npx vitest run --project core      # 198 pass
+npx vitest run --project core      # 199 pass
 npx vitest run --project native    # 9 pass (Expo via react-native-web)
 npx vitest run --project web       # 18 pass (React 8, Vue 7, demo 3)
 npx vitest run --project angular   # 8 pass
@@ -153,7 +153,7 @@ npx tsx tools/cli/src/bin.ts validate examples/forms/contact.vds.json
 npx tsx tools/cli/src/bin.ts compile examples/forms/invoice.vds.json --json
 npx tsx tools/cli/src/bin.ts inspect examples/forms/customer-registration.vds.json
 
-# Django/Python adapter (result: 41/41 pass)
+# Django/Python adapter (result: 42/42 pass)
 cd execution-adapters/django && python3 -m pytest -q
 
 # Live preview (builds 248 modules; serves on 0.0.0.0:5173)
@@ -163,10 +163,10 @@ npx vite --host 0.0.0.0 --port 5173
 # Benchmarks (runs; writes benchmarks/RESULTS.md)
 npm run bench
 
-# Laravel — local via PHP-WASM (result: 153/153 pass across 6 suites)
+# Laravel — local via PHP-WASM (result: 155/155 pass across 6 suites)
 npm install --no-save --no-audit --no-fund @php-wasm/node   # GPL-2.0, not committed
 node execution-adapters/laravel/tests/run-wasm.mjs
-# Laravel — CI / any host with PHP >= 8.1 (result: 153/153 pass)
+# Laravel — CI / any host with PHP >= 8.1 (result: 155/155 pass)
 cd execution-adapters/laravel && composer install && composer test
 ```
 
@@ -191,7 +191,7 @@ for VDS Database/API/Storage/Notification/Plugin-Host builders. Accordingly:
   distribution hosts in the sandbox (ADR-0006). Not started; capability
   negotiation rejects unsupported field types with structured diagnostics.
 - **Laravel:** Now **Verified** — no native PHP in the sandbox, so the full suite
-  (153 checks) runs under PHP-WASM 8.2 locally (`tests/run-wasm.mjs`); CI runs the
+  (155 checks) runs under PHP-WASM 8.2 locally (`tests/run-wasm.mjs`); CI runs the
   same suites on real PHP 8.2 with `illuminate/http` (real-Request integration)
   and `pdo_sqlite` (durability). `@php-wasm/node` is GPL-2.0 and not committed.
 - **Expo on-device:** Verified via react-native-web + jsdom; physical-device run

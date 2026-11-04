@@ -10,13 +10,13 @@ Last updated: 2026-11-04 (P0/P1 security corrections implemented + verified on `
 
 | Suite | Command | Result |
 |---|---|---|
-| TypeScript (all projects) | `npx vitest run` | **233 / 233 pass** (20 files) |
-| — core | `npx vitest run --project core` | 198 pass |
+| TypeScript (all projects) | `npx vitest run` | **234 / 234 pass** (20 files) |
+| — core | `npx vitest run --project core` | 199 pass |
 | — native (Expo via RN-web) | `npx vitest run --project native` | 9 pass |
 | — web (React/Vue/demo) | `npx vitest run --project web` | 18 pass |
 | — angular (JIT) | `npx vitest run --project angular` | 8 pass |
-| Django/Python adapter | `cd execution-adapters/django && python3 -m pytest -q` | **41 / 41 pass** |
-| Laravel/PHP adapter (PHP-WASM 8.2) | `node execution-adapters/laravel/tests/run-wasm.mjs` | **153 / 153 pass** (6 suites) |
+| Django/Python adapter | `cd execution-adapters/django && python3 -m pytest -q` | **42 / 42 pass** |
+| Laravel/PHP adapter (PHP-WASM 8.2) | `node execution-adapters/laravel/tests/run-wasm.mjs` | **155 / 155 pass** (6 suites) |
 | Cross-language conformance | `npx tsx tools/cli/src/bin.ts conformance` | **73 / 73 pass** |
 | Idempotency parity (TS/Python/PHP) | shared `fixtures/idempotency.json` | byte-identical in all 3 |
 | Benchmarks | `npm run bench` | runs; `benchmarks/RESULTS.md` |
@@ -45,10 +45,10 @@ Last updated: 2026-11-04 (P0/P1 security corrections implemented + verified on `
 | R18 | Expo rendering verified | verified | `adapters/expo` 9 tests via RN-web/jsdom; capability negotiation. **On-device** verification not possible in sandbox (documented) |
 | R19 | React/Angular/Vue renderers verified | verified | React 8, Vue 7, Angular 8 tests; live React preview app (3 e2e tests) |
 | R20 | Flutter/Compose/SwiftUI at declared conformance | blocked | No Dart/Kotlin/Swift toolchains or distribution hosts (ADR-0006). Not started; documented unsupported-in-sandbox |
-| R21 | Node/Django/Laravel equivalent contract tests | verified | Node 30 tests **verified**; Django 41 tests **verified**; Laravel 153 checks across 6 suites **verified** (PHP-WASM 8.2 locally; real PHP 8.2 + illuminate/http in CI). All three share the same expression/form/idempotency fixtures |
+| R21 | Node/Django/Laravel equivalent contract tests | verified | Node 31 tests **verified**; Django 42 tests **verified**; Laravel 155 checks across 6 suites **verified** (PHP-WASM 8.2 locally; real PHP 8.2 + illuminate/http in CI). All three share the same expression/form/idempotency fixtures |
 | R22 | AI/MCP/Plugin Host tools permission-controlled | verified | `tools/mcp-server` 10 tests; fail-closed host-granted permissions; 6 contract-backed tools. VDS Plugin-Host source unavailable → standalone MCP (no invented VDS APIs) |
 | R23 | Migrations tested | verified | `form-migrations` 6 tests; BFS path, backup, allowLossy; `vds-form migrate` |
-| R24 | Security tests pass | verified | Core `tests/security.test.ts` 18 tests (pollution, no-eval, ReDoS, budgets, redaction, payload hygiene, fail-closed RBAC) **plus** adversarial adapter suites: Node 14, Django 13, PHP 32 — forged auth, operation override/allowlist, cross-principal/tenant idempotency isolation, payload-swap conflict, concurrent double-execution, durable restart replay, authorization-before-replay |
+| R24 | Security tests pass | verified | Core `tests/security.test.ts` 18 tests (pollution, no-eval, ReDoS, budgets, redaction, payload hygiene, fail-closed RBAC) **plus** adversarial adapter suites: Node 15, Django 14, PHP 34 — forged auth, operation override/allowlist, cross-principal/tenant idempotency isolation, payload-swap conflict, concurrent double-execution, durable restart replay, authorization-before-replay |
 | R25 | Accessibility/localization contracts implemented | verified | aria-* + label association (React/Angular tests); `localize` + locale fallback; capability manifests |
 | R26 | Examples installable/runnable | verified | `examples/react-app` builds (`vite build`, 248 modules) + live server; headless-node example; 9 canonical forms |
 | R27 | Documentation matches implementation | verified | This ledger + `FINAL_IMPLEMENTATION_AUDIT.md` + ADRs + per-package READMEs |
@@ -76,9 +76,9 @@ Last updated: 2026-11-04 (P0/P1 security corrections implemented + verified on `
 | Conformance fixtures + runner | `packages/form-conformance` | verified | 5 (73 cases) | `vds-form conformance` | 73/73 |
 | VDS logic/workflow integration | `integrations/vds-logic` | verified | 7 | `vitest run --project core integrations/vds-logic` | pass |
 | VDS provider contracts + TEST adapters | `integrations/vds-contracts` | implemented | (via consumers) | node/react/django | pass |
-| Node trusted execution | `execution-adapters/node` | verified | 30 | `vitest run --project core execution-adapters/node` | 30/30 |
-| Django trusted execution | `execution-adapters/django` | verified | 41 | `python3 -m pytest -q` | 41/41 |
-| Laravel trusted execution | `execution-adapters/laravel` | verified | 153 (6 suites) | `composer test` (CI) / `node tests/run-wasm.mjs` (local) | 153/153 |
+| Node trusted execution | `execution-adapters/node` | verified | 31 | `vitest run --project core execution-adapters/node` | 31/31 |
+| Django trusted execution | `execution-adapters/django` | verified | 42 | `python3 -m pytest -q` | 42/42 |
+| Laravel trusted execution | `execution-adapters/laravel` | verified | 155 (6 suites) | `composer test` (CI) / `node tests/run-wasm.mjs` (local) | 155/155 |
 | Expo renderer | `adapters/expo` | verified | 9 | `vitest run --project native` | pass |
 | React renderer | `adapters/react` | verified | 8 | `vitest run --project web` | pass |
 | Vue renderer | `adapters/vue` | verified | 7 | `vitest run --project web` | pass |
@@ -94,7 +94,7 @@ Last updated: 2026-11-04 (P0/P1 security corrections implemented + verified on `
 
 ## Environment limitations (this sandbox)
 
-- No native PHP/Composer → Laravel adapter verified locally under **PHP-WASM 8.2** (`tests/run-wasm.mjs`, 153 checks). CI runs the same suites on a **real PHP 8.2** toolchain with `illuminate/http` (real-Request integration) and `pdo_sqlite` (durability). `@php-wasm/node` is GPL-2.0 and intentionally not a committed dependency.
+- No native PHP/Composer → Laravel adapter verified locally under **PHP-WASM 8.2** (`tests/run-wasm.mjs`, 155 checks). CI runs the same suites on a **real PHP 8.2** toolchain with `illuminate/http` (real-Request integration) and `pdo_sqlite` (durability). `@php-wasm/node` is GPL-2.0 and intentionally not a committed dependency.
 - No Dart/Flutter, Kotlin/Gradle, Swift/Xcode/Android SDK → Flutter/Compose/SwiftUI **blocked / not started** (ADR-0006).
 - No physical Expo device → Expo verified via react-native-web + jsdom; on-device run is a documented release task.
 - No public VDS Database/API/Storage/Notification/Plugin-Host builder repos → integration via real contracts + explicitly-named TEST adapters; production wiring blocked on unavailable source (Phase 0 audit).

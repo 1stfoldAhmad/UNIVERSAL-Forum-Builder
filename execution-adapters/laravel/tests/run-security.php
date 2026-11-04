@@ -118,6 +118,18 @@ $res = $h->handle($forged, auth_ctx('real-user', [])); // trusted arg has no per
 $r->eq('forged request auth ignored', 'PERMISSION_DENIED', $res['code'] ?? null);
 $r->eq('forged auth did not execute', [], $calls->getArrayCopy());
 
+// Forge EVERY identity field; the operation must see only the server principal.
+$seen = null;
+$ops = new OperationRegistry();
+$ops->register('test:contact.create', function ($p, $c) use (&$seen) { $seen = $c['auth']; return ['id' => 'rec-1']; });
+$h = new TrustedSubmissionHandler(['contact' => gated_contact_ir()], $ops, new SimpleRbacEvaluator());
+$forged = contact_request();
+$forged['auth'] = ['userId' => 'attacker', 'tenantId' => 'evil-tenant', 'roles' => ['admin'], 'permissions' => ['*']];
+$serverPrincipal = ['userId' => 'real-user', 'tenantId' => 'real-tenant', 'roles' => ['member'], 'permissions' => ['contact:create']];
+$res = $h->handle($forged, $serverPrincipal);
+$r->eq('forged all-fields submission succeeds via server principal', 'succeeded', $res['status']);
+$r->check('operation sees only server principal (all 4 fields)', $seen === $serverPrincipal, json_encode($seen));
+
 // ---- Canonical determinism ----
 $r->check('canonical key-order independent', Idempotency::canonicalJson(['b' => 1, 'a' => ['d' => 2, 'c' => 3]]) === Idempotency::canonicalJson(['a' => ['c' => 3, 'd' => 2], 'b' => 1]));
 $r->check('fingerprint stable under reordering', Idempotency::payloadFingerprint(['a' => 1, 'b' => 2]) === Idempotency::payloadFingerprint(['b' => 2, 'a' => 1]));
