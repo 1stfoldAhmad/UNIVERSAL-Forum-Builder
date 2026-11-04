@@ -13,17 +13,19 @@ import type { Expr } from '@vds-form/types';
 import { compileForm } from '@vds-form/compiler';
 import {
   collectUnknownPropertyIssues, computeReadPolicy, filterReadableValues,
-  hiddenTemplatePaths, stripPaths, computeEffectiveState, validateValues,
+  hiddenTemplatePaths, stripPaths, computeEffectiveState, validateValues, validateOperationInputs,
 } from '@vds-form/validation';
 import { buildSubmissionPayload } from '@vds-form/submission';
-import type { FormDocument } from '@vds-form/types';
+import type { FormDocument, OperationInputDef } from '@vds-form/types';
 import expressionFixtures from '../fixtures/expressions.json';
 import formFixtures from '../fixtures/forms.json';
 import securityFixtures from '../fixtures/security-paths.json';
+import operationLimitFixtures from '../fixtures/operation-limits.json';
 
 export const EXPRESSION_FIXTURES = expressionFixtures;
 export const FORM_FIXTURES = formFixtures;
 export const SECURITY_FIXTURES = securityFixtures;
+export const OPERATION_LIMIT_FIXTURES = operationLimitFixtures;
 export const CONFORMANCE_SPEC_VERSION = '1.0.0';
 
 export interface CaseResult {
@@ -147,9 +149,22 @@ export function runSecurityConformance(): CaseResult[] {
   return results;
 }
 
+
+/** Shared operation-input resource-limit / forbidden-name vectors. */
+export function runOperationLimitConformance(): CaseResult[] {
+  const results: CaseResult[] = [];
+  for (const c of operationLimitFixtures.cases as unknown as Array<{ id: string; defs: Record<string, OperationInputDef>; values: Record<string, unknown>; expectCodes: string[] }>) {
+    const { issues } = validateOperationInputs(c.defs, c.values);
+    const codes = issues.map((i) => i.code);
+    const passed = c.expectCodes.length === 0 ? codes.length === 0 : c.expectCodes.every((code) => codes.includes(code));
+    results.push({ suite: 'operation-limits', id: c.id, passed, expected: c.expectCodes, actual: codes });
+  }
+  return results;
+}
+
 /** Run every conformance suite and aggregate a report. */
 export function runConformance(): ConformanceReport {
-  const results = [...runExpressionConformance(), ...runFormConformance(), ...runSecurityConformance()];
+  const results = [...runExpressionConformance(), ...runFormConformance(), ...runSecurityConformance(), ...runOperationLimitConformance()];
   const passed = results.filter((r) => r.passed).length;
   return {
     specVersion: CONFORMANCE_SPEC_VERSION,

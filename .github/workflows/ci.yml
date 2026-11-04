@@ -29,6 +29,12 @@ jobs:
         run: cd examples/react-app && npx vite build
       - name: Benchmarks (smoke)
         run: npm run bench
+      - name: Build packages (JS + declarations)
+        run: npm run build:packages
+      - name: Pack release tarballs (no publish)
+        run: npm run pack:packages
+      - name: Fresh external-project package smoke test
+        run: npm run test:packages
 
   django:
     name: Django/Python trusted adapter

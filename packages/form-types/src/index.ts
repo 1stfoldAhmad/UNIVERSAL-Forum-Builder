@@ -163,8 +163,20 @@ export interface SubmissionDef {
 }
 
 export interface PersistenceDef {
-  drafts?: { enabled: boolean; scope?: 'user' | 'tenant' | 'device'; ttlSeconds?: number };
-  offline?: { enabled: boolean };
+  drafts?: {
+    enabled: boolean;
+    scope?: 'user' | 'tenant' | 'device';
+    ttlSeconds?: number;
+    /** Explicit opt-in to persist registry-sensitive fields (passwords/tokens).
+     * Default false: sensitive values are stripped before draft storage. */
+    includeSensitive?: boolean;
+  };
+  offline?: {
+    enabled: boolean;
+    /** Explicit opt-in to queue registry-sensitive fields. Default false.
+     * Queues are durable and may outlive the session; prefer re-authentication. */
+    includeSensitive?: boolean;
+  };
 }
 
 export interface SecurityDef {

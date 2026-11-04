@@ -110,7 +110,19 @@ export function createFormMcpServer(options: FormMcpOptions = {}): McpServer {
     },
   }, async ({ document, targetVersion, allowLossy }) => {
     if (!gate('form:migrate')) return deny('form:migrate');
-    const input = typeof document === 'string' ? JSON.parse(document) : document;
+    let input: unknown;
+    if (typeof document === 'string') {
+      try {
+        input = JSON.parse(document);
+      } catch (e) {
+        return jsonResult({ ok: false, diagnostics: [{ code: 'MCP_INPUT_INVALID', severity: 'error', message: `document is not valid JSON: ${(e as Error).message}`, path: '/document' }] }, true);
+      }
+    } else {
+      input = document;
+    }
+    if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+      return jsonResult({ ok: false, diagnostics: [{ code: 'MCP_INPUT_INVALID', severity: 'error', message: 'document must be a JSON object.', path: '/document' }] }, true);
+    }
     const registry = createDefaultMigrationRegistry();
     const result = registry.migrate(input, targetVersion ?? CURRENT_SPEC_VERSION, { allowLossy });
     if (!result.ok) return jsonResult({ ok: false, diagnostics: result.diagnostics, backup: result.backup }, true);

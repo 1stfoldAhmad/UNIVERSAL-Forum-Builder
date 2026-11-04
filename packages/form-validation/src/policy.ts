@@ -11,6 +11,13 @@ import type {
 export const FORBIDDEN_SEGMENTS = new Set(['__proto__', 'prototype', 'constructor']);
 const MAX_DEPTH = 64;
 const MAX_NODES = 10000;
+export const OPERATION_INPUT_LIMITS = {
+  maxDepth: MAX_DEPTH,
+  maxNodes: MAX_NODES,
+  maxStringLength: 10000,
+  maxArrayLength: 1000,
+  maxObjectKeys: 1000,
+} as const;
 const ASSET_KEYS = new Set(['id', 'name', 'mimeType', 'sizeBytes', 'source', 'localUri', 'assetRef', 'url']);
 
 export interface PolicyIssue { code: string; message: string; path: string; fieldId?: string; severity: 'error'; source: 'schema' }
@@ -171,27 +178,32 @@ function typeMatchesPolicy(value: unknown, vt: ValueType): boolean {
 export function validateOperationInputs(defs: Record<string, OperationInputDef> | undefined, values: FormValues): { values: FormValues; issues: ValidationIssue[] } {
   const out: FormValues = {}; const issues: ValidationIssue[] = [];
   if (!defs) return { values: out, issues };
-  const check = (def: OperationInputDef, value: unknown, path: string): unknown => {
+  let nodes = 0;
+  const L = OPERATION_INPUT_LIMITS;
+  // `def === undefined` walks additionalProperties / untyped array elements:
+  // resource limits and forbidden names still apply at every depth.
+  const check = (def: OperationInputDef | undefined, value: unknown, path: string, depth: number): unknown => {
+    if (depth > L.maxDepth) { issues.push(issue('OPERATION_INPUT_TOO_DEEP', 'Operation input exceeds maximum nesting depth.', path)); return undefined; }
+    if (++nodes > L.maxNodes) { issues.push(issue('OPERATION_INPUT_TOO_MANY_NODES', 'Operation input exceeds maximum node count.', path)); return undefined; }
     if (value === undefined || value === null) {
-      if (def.required) issues.push(issue('OPERATION_INPUT_REQUIRED', 'Required operation input is missing.', path));
+      if (def?.required) issues.push(issue('OPERATION_INPUT_REQUIRED', 'Required operation input is missing.', path));
       return undefined;
     }
-    if (!typeMatchesPolicy(value, def.valueType)) { issues.push(issue('OPERATION_INPUT_TYPE_INVALID', `Expected ${def.valueType}.`, path)); return undefined; }
+    if (typeof value === 'string' && value.length > L.maxStringLength) { issues.push(issue('OPERATION_INPUT_STRING_TOO_LARGE', 'Operation input string exceeds maximum length.', path)); return undefined; }
+    if (def && !typeMatchesPolicy(value, def.valueType)) { issues.push(issue('OPERATION_INPUT_TYPE_INVALID', `Expected ${def.valueType}.`, path)); return undefined; }
     if (Array.isArray(value)) {
-      if (!def.items) return value;
-      return value.map((item, i) => check(def.items!, item, `${path}.${i}`)).filter((v) => v !== undefined);
+      if (value.length > L.maxArrayLength) { issues.push(issue('OPERATION_INPUT_ARRAY_TOO_LARGE', 'Operation input array exceeds maximum length.', path)); return undefined; }
+      return value.map((item, i) => check(def?.items, item, `${path}.${i}`, depth + 1)).filter((v) => v !== undefined);
     }
     if (isPlainObject(value)) {
+      const entries = Object.entries(value);
+      if (entries.length > L.maxObjectKeys) { issues.push(issue('OPERATION_INPUT_OBJECT_TOO_LARGE', 'Operation input object exceeds maximum property count.', path)); return undefined; }
       const obj: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(value)) {
+      for (const [k, v] of entries) {
         if (FORBIDDEN_SEGMENTS.has(k)) { issues.push(issue('UNSAFE_PROPERTY', 'Prototype-pollution property rejected.', `${path}.${k}`)); continue; }
-        const childDef = def.properties?.[k];
-        if (!childDef) {
-          if (!def.additionalProperties) issues.push(issue('UNKNOWN_PROPERTY', 'Operation input property is not declared.', `${path}.${k}`));
-          else obj[k] = v;
-          continue;
-        }
-        const cleaned = check(childDef, v, `${path}.${k}`);
+        const childDef = def?.properties?.[k];
+        if (!childDef && def && !def.additionalProperties) { issues.push(issue('UNKNOWN_PROPERTY', 'Operation input property is not declared.', `${path}.${k}`)); continue; }
+        const cleaned = check(childDef, v, `${path}.${k}`, depth + 1);
         if (cleaned !== undefined) obj[k] = cleaned;
       }
       return obj;
@@ -200,7 +212,7 @@ export function validateOperationInputs(defs: Record<string, OperationInputDef> 
   };
   for (const [name, def] of Object.entries(defs)) {
     if (FORBIDDEN_SEGMENTS.has(name)) { issues.push(issue('UNSAFE_PROPERTY', 'Operation input name rejected.', name)); continue; }
-    const cleaned = check(def, values[name], name);
+    const cleaned = check(def, values[name], name, 0);
     if (cleaned !== undefined) out[name] = cleaned as never;
   }
   return { values: out, issues };

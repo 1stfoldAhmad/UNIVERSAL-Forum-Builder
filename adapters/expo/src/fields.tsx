@@ -4,7 +4,7 @@ import {
   type KeyboardTypeOptions,
 } from 'react-native';
 import type { FormController } from '@vds-form/runtime';
-import type { FieldOption, NormalizedField, UploadedAssetRef } from '@vds-form/types';
+import type { FieldOption, NormalizedAsset, NormalizedField, UploadedAssetRef } from '@vds-form/types';
 import { localize } from '@vds-form/validation';
 import { useField } from './hooks';
 import type { ExpoPickerAdapters } from './capabilities';
@@ -281,28 +281,60 @@ export function FileField(props: FieldProps) {
   const isImage = field.type === 'image';
   const multiple = field.validation.multiple === true;
   const picker = isImage ? pickers?.pickImage : pickers?.pickDocument;
-  const available = Boolean(picker) && Boolean(controller.uploadProvider);
+  const cameraAvailable = isImage && Boolean(pickers?.captureCamera) && Boolean(controller.uploadProvider);
+  const available = (Boolean(picker) || cameraAvailable) && Boolean(controller.uploadProvider);
   const current = slice.value as UploadedAssetRef | UploadedAssetRef[] | null;
+
+  const uploadAssets = async (assets: NormalizedAsset[]) => {
+    if (!controller.uploadProvider || assets.length === 0) return;
+    setUploadError(null);
+    setProgress(0);
+    const successes: UploadedAssetRef[] = [];
+    const failures: string[] = [];
+    for (const asset of assets) {
+      try {
+        const ref = await controller.uploadProvider.upload({
+          asset,
+          constraints: { accept: field.validation.accept, maxSizeBytes: field.validation.maxSizeBytes },
+          onProgress: setProgress,
+          auth: controller.auth,
+        });
+        successes.push(ref);
+      } catch (e) {
+        failures.push(`${asset.name}: ${(e as Error).message}`);
+      }
+    }
+    if (successes.length > 0) {
+      const latest = controller.getFieldValue(path) as UploadedAssetRef | UploadedAssetRef[] | null;
+      const existing = Array.isArray(latest) ? latest : latest ? [latest] : [];
+      controller.setFieldValue(path, multiple ? [...existing, ...successes] : successes[0]);
+    }
+    if (failures.length > 0) setUploadError(failures.join('; '));
+    setProgress(null);
+  };
 
   const doPick = async () => {
     if (!picker || !controller.uploadProvider) return;
-    setUploadError(null);
     try {
       const picked = isImage
         ? await pickers!.pickImage!({ accept: field.validation.accept })
-        : (await pickers!.pickDocument!({ accept: field.validation.accept, multiple }))?.[0] ?? null;
+        : await pickers!.pickDocument!({ accept: field.validation.accept, multiple });
       if (!picked) return;
-      setProgress(0);
-      const ref = await controller.uploadProvider.upload({
-        asset: picked,
-        constraints: { accept: field.validation.accept, maxSizeBytes: field.validation.maxSizeBytes },
-        onProgress: setProgress,
-        auth: controller.auth,
-      });
-      controller.setFieldValue(path, multiple ? [...(Array.isArray(current) ? current : []), ref] : ref);
+      const assets = isImage ? [picked as NormalizedAsset] : (multiple ? (picked as NormalizedAsset[]) : (picked as NormalizedAsset[]).slice(0, 1));
+      await uploadAssets(assets);
     } catch (e) {
       setUploadError((e as Error).message);
-    } finally {
+      setProgress(null);
+    }
+  };
+
+  const doCamera = async () => {
+    if (!pickers?.captureCamera || !controller.uploadProvider) return;
+    try {
+      const asset = await pickers.captureCamera();
+      if (asset) await uploadAssets([asset]);
+    } catch (e) {
+      setUploadError((e as Error).message);
       setProgress(null);
     }
   };
@@ -322,19 +354,34 @@ export function FileField(props: FieldProps) {
               {Array.isArray(current) ? current.map((a) => a.name).join(', ') : current.name} ✓ uploaded
             </Text>
           ) : null}
-          <Pressable
-            onPress={doPick}
-            disabled={slice.disabled || slice.readonly || progress !== null}
-            style={[styles.button, styles.secondaryButton, { alignSelf: 'flex-start' }]}
-            accessibilityRole="button"
-            accessibilityLabel={`${isImage ? 'Choose image' : 'Choose file'} for ${localize(field.label, locale)}`}
-            accessibilityState={{ disabled: slice.disabled || progress !== null }}
-            testID={`pick-${path}`}
-          >
-            <Text style={[styles.buttonText, styles.secondaryText]}>
-              {progress !== null ? `Uploading… ${Math.round(progress * 100)}%` : isImage ? 'Choose image' : 'Choose file'}
-            </Text>
-          </Pressable>
+          {picker ? (
+            <Pressable
+              onPress={doPick}
+              disabled={slice.disabled || slice.readonly || progress !== null}
+              style={[styles.button, styles.secondaryButton, { alignSelf: 'flex-start' }]}
+              accessibilityRole="button"
+              accessibilityLabel={`${isImage ? 'Choose image' : 'Choose file'} for ${localize(field.label, locale)}`}
+              accessibilityState={{ disabled: slice.disabled || progress !== null }}
+              testID={`pick-${path}`}
+            >
+              <Text style={[styles.buttonText, styles.secondaryText]}>
+                {progress !== null ? `Uploading… ${Math.round(progress * 100)}%` : isImage ? 'Choose image' : 'Choose file'}
+              </Text>
+            </Pressable>
+          ) : null}
+          {cameraAvailable ? (
+            <Pressable
+              onPress={doCamera}
+              disabled={slice.disabled || slice.readonly || progress !== null}
+              style={[styles.button, styles.secondaryButton, { alignSelf: 'flex-start', marginTop: 8 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Take photo for ${localize(field.label, locale)}`}
+              accessibilityState={{ disabled: slice.disabled || progress !== null }}
+              testID={`camera-${path}`}
+            >
+              <Text style={[styles.buttonText, styles.secondaryText]}>Take photo</Text>
+            </Pressable>
+          ) : null}
           {uploadError ? <Text style={styles.error} accessibilityRole="alert" testID={`upload-error-${path}`}>{uploadError}</Text> : null}
         </View>
       )}

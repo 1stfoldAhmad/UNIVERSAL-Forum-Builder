@@ -56,10 +56,14 @@
           "properties": {
             "enabled": { "type": "boolean" },
             "scope": { "enum": ["user", "tenant", "device"] },
-            "ttlSeconds": { "type": "integer", "minimum": 1, "maximum": 31536000 }
+            "ttlSeconds": { "type": "integer", "minimum": 1, "maximum": 31536000 },
+            "includeSensitive": { "type": "boolean" }
           }
         },
-        "offline": { "type": "object", "required": ["enabled"], "additionalProperties": false, "properties": { "enabled": { "type": "boolean" } } }
+        "offline": {
+          "type": "object", "required": ["enabled"], "additionalProperties": false,
+          "properties": { "enabled": { "type": "boolean" }, "includeSensitive": { "type": "boolean" } }
+        }
       }
     },
     "security": {

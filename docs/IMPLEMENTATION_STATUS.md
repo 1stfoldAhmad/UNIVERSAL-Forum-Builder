@@ -4,22 +4,23 @@ Status labels: `not-started` · `in-progress` · `implemented` · `verified` · 
 A row is **verified** only when its acceptance criteria passed via the recorded command.
 Final narrative audit: `docs/FINAL_IMPLEMENTATION_AUDIT.md`.
 
-Last updated: 2026-11-04 (independent-audit remediation Stages 1–8 on `arena/a98c1e4e-universal-forum-builder`; see `docs/audit/REMEDIATION_2026-11-04.md`. Changes are on the remediation pull request for review; no merge is authorized.)
+Last updated: 2026-11-04 (independent-audit remediation on `arena/f7c0405f-universal-forum-builder`, base `main` @ `1fba279`; see `docs/audit/INDEPENDENT_REMEDIATION_2026-11-04.md`. Prior PR #3 is merged. No package publication or merge is authorized for this branch without explicit instruction.)
 
 ## Test totals (actual, this sandbox)
 
 | Suite | Command | Result |
 |---|---|---|
-| TypeScript (all projects) | `npx vitest run` | **254 / 254 pass** (21 files) |
-| — core | `npx vitest run --project core` | 219 pass |
-| — native (Expo via RN-web) | `npx vitest run --project native` | 9 pass |
-| — web (React/Vue/demo) | `npx vitest run --project web` | 18 pass |
+| TypeScript (all projects) | `npx vitest run` | **283 / 283 pass** (26 files) |
+| — core | `npx vitest run --project core` | 244 pass |
+| — native (Expo via RN-web) | `npx vitest run --project native` | 12 pass |
+| — web (React/Vue/demo) | `npx vitest run --project web` | 19 pass |
 | — angular (JIT) | `npx vitest run --project angular` | 8 pass |
-| Django/Python adapter | `cd execution-adapters/django && python3 -m pytest -q` | **51 / 51 pass** |
-| Laravel/PHP adapter (PHP-WASM 8.2) | `node execution-adapters/laravel/tests/run-wasm.mjs` | **190 / 190 pass** (8 suites) |
-| Cross-language conformance | `npx tsx tools/cli/src/bin.ts conformance` | **87 / 87 pass** |
+| Django/Python adapter | `cd execution-adapters/django && python3 -m pytest -q` | **55 / 55 pass** |
+| Laravel/PHP adapter (PHP-WASM 8.2) | `node execution-adapters/laravel/tests/run-wasm.mjs` | **212 / 212 pass** (10 suites) |
+| Cross-language conformance | `npx tsx tools/cli/src/bin.ts conformance` | **96 / 96 pass** |
 | Idempotency parity (TS/Python/PHP) | shared `fixtures/idempotency.json` | byte-identical in all 3 |
 | Benchmarks | `npm run bench` | runs; `benchmarks/RESULTS.md` |
+| Package build/pack/smoke | `npm run build:packages && npm run pack:packages && npm run test:packages` | **pass** (fresh external project; no publish) |
 
 ## Acceptance-criteria tracker (spec §30)
 
@@ -39,20 +40,20 @@ Last updated: 2026-11-04 (independent-audit remediation Stages 1–8 on `arena/a
 | R12 | Missing executors → explicit errors | verified | `SUBMISSION_EXECUTOR_NOT_REGISTERED` / `SUBMISSION_OPERATION_UNRESOLVED`; tested |
 | R13 | Database/API integrate via their own VDS contracts | implemented | No public VDS Database/API Builder source (Phase 0). Real provider contracts + explicitly-named TEST adapters (`integrations/vds-contracts`); host registers production operations. Production wiring **blocked** on unavailable VDS source |
 | R14 | Auth/RBAC enforced by trusted execution | verified | Fail-closed RBAC in Node + Django + Laravel handlers; identity is a **server-derived trusted argument, never from the request body** (body `auth` → `AUTH_IN_BODY_FORBIDDEN`); `RBAC_NOT_CONFIGURED`/`PERMISSION_DENIED`/`FIELD_WRITE_DENIED`; field-level **read** authorization now enforced/redacted; UI auth is never forwarded as backend identity; adversarial forgery tests in all 3 adapters |
-| R15 | Storage/uploads via registered providers | verified | `UploadProvider` contract; drag-drop in React/Vue/Angular/Expo; `TestUploadProvider`; asset guards |
+| R15 | Storage/uploads via registered providers | verified | `UploadProvider` contract; drag-drop in React/Vue/Angular; **Expo dragDrop=false** (picker/camera via host adapters); `TestUploadProvider`; asset guards |
 | R16 | Workflow integration uses Workflow Builder | verified | Real `vds-json-logic` engine vendored; `logic:`/`workflow:` executors (`integrations/vds-logic`, 7 tests) |
-| R17 | Draft persistence + approved offline queue | verified | `form-persistence`; version-checked drafts; offline queue gated by contract; runtime tests |
-| R18 | Expo rendering verified | verified | `adapters/expo` 9 tests via RN-web/jsdom; capability negotiation. **On-device** verification not possible in sandbox (documented) |
-| R19 | React/Angular/Vue renderers verified | verified | React 8, Vue 7, Angular 8 tests; live React preview app (3 e2e tests) |
+| R17 | Draft persistence + approved offline queue | verified | `form-persistence`; sensitive values stripped by default; version-checked drafts; offline queue gated by contract; durable KeyValue/SQLite references (see `docs/PERSISTENCE.md`); memory adapters explicitly non-durable |
+| R18 | Expo rendering verified | verified | `adapters/expo` 12 tests via RN-web/jsdom; multi-upload/partial-failure/camera injected-adapter tests; capability negotiation. **On-device** verification not possible in sandbox (documented) |
+| R19 | React/Angular/Vue renderers verified | verified | React 8, Vue 8 (file-picker interaction tested), Angular 8 tests; live React preview app (3 e2e tests) |
 | R20 | Flutter/Compose/SwiftUI at declared conformance | blocked | No Dart/Kotlin/Swift toolchains or distribution hosts (ADR-0006). Not started; documented unsupported-in-sandbox |
 | R21 | Node/Django/Laravel equivalent contract tests | verified | Node 31 tests **verified**; Django 51 tests **verified**; Laravel 190 checks across 8 suites **verified locally under PHP-WASM 8.2**. Real PHP 8.2 + illuminate/http CI runs on the remediation pull request; see PR checks for the authoritative run result. All three share expression/form/idempotency/security fixtures |
-| R22 | AI/MCP/Plugin Host tools permission-controlled | verified | `tools/mcp-server` 10 tests; fail-closed host-granted permissions; 6 contract-backed tools. PluginHost rejects `sandboxed`/`untrusted` manifests (no isolation adapter), enforces per-plugin grants, and supports dependency-aware revocation/cleanup |
+| R22 | AI/MCP/Plugin Host tools permission-controlled | verified | `tools/mcp-server` 13 tests (malformed migration diagnostics + permission denial); PluginHost 9 tests incl. renderer registration contract; fail-closed grants; `sandboxed`/`untrusted` rejected (no isolation adapter) |
 | R23 | Migrations tested | verified | `form-migrations` 6 tests; BFS path, backup, allowLossy; `vds-form migrate` |
 | R24 | Security tests pass | verified | Core `tests/security.test.ts` 18 + `tests/remediation.test.ts` 18; shared security vectors 14 (TS/Python/PHP); adversarial adapter suites: Node 15, Django 20, PHP 55 — hidden descendants, unknown properties, typed operation inputs, read redaction, plugin trust, forged UI identity, forged auth, operation override/allowlist, idempotency isolation |
 | R25 | Accessibility/localization contracts implemented | verified | aria-* + label association (React/Angular tests); `localize` + locale fallback; capability manifests |
 | R26 | Examples installable/runnable | verified | `examples/react-app` builds (`vite build`, 249 modules) + live server; headless-node example; 9 canonical forms |
 | R27 | Documentation matches implementation | verified | This ledger + `FINAL_IMPLEMENTATION_AUDIT.md` + ADRs + per-package READMEs |
-| R28 | CI reproducible evidence | implemented | `.github/workflows/ci.yml` runs all suites + conformance + typecheck + build; Laravel `composer test` includes the new security-policy/remediation suites. Prior baseline CI was green; remediation PR CI is the real-PHP verification gate |
+| R28 | CI reproducible evidence | verified | Run [41880887766](https://github.com/1stfoldAhmad/UNIVERSAL-Forum-Builder/actions/runs/41880887766) success: TS core/renderers/tools + package smoke, Django, Laravel full verification (native PHP 8.2 + Illuminate + PDO SQLite). CI includes operation-limit and idempotency-recovery suites |
 | R29 | Unsupported capabilities documented | verified | ADR-0006; capability negotiation rejects unsupported types; audit lists blocked targets |
 | R30 | No fake-success/placeholder presented as complete | verified | TEST adapters explicitly named; status labels enforced; no always-success mocks presented as real |
 
@@ -79,7 +80,7 @@ Last updated: 2026-11-04 (independent-audit remediation Stages 1–8 on `arena/a
 | Node trusted execution | `execution-adapters/node` | verified | 31 | `vitest run --project core execution-adapters/node` | 31/31 |
 | Django trusted execution | `execution-adapters/django` | verified | 51 | `python3 -m pytest -q` | 51/51 |
 | Laravel trusted execution | `execution-adapters/laravel` | verified | 190 (8 suites) | `composer test` (CI) / `node tests/run-wasm.mjs` (local) | 190/190 local WASM |
-| Expo renderer | `adapters/expo` | verified | 9 | `vitest run --project native` | pass |
+| Expo renderer | `adapters/expo` | verified | 12 | `vitest run --project native` | pass |
 | React renderer | `adapters/react` | verified | 8 | `vitest run --project web` | pass |
 | Vue renderer | `adapters/vue` | verified | 7 | `vitest run --project web` | pass |
 | Angular renderer | `adapters/angular` | verified | 8 | `vitest run --project angular` | pass |
@@ -111,5 +112,5 @@ See `docs/audit/REMEDIATION_2026-11-04.md` for per-finding root causes, correcti
 | 4 | `SecurityDef.fieldAccess.read` unused | verified | Runtime ingress/snapshot/field-slice/options/result redaction; trusted-handler result filtering; fail-closed unresolved read policy |
 | 5 | Sandboxed plugin trust claimed without isolation | verified | `PluginHost` rejects sandboxed/untrusted manifests; per-plugin grants; immutable manifest copies; dependency-aware unregister/cascade cleanup |
 | 6 | UI auth forwarded as backend identity | verified | Runtime no longer populates `SubmissionContext.authenticatedContext`; Node/logic executors use server-configured principals; forged-context tests |
-| 7 | Full verification | verified locally; real-PHP CI runs on PR | TS 254/254, typecheck 0, conformance 87/87, Django 51/51, PHP-WASM 190/190, React build OK |
+| 7 | Full verification | verified locally; real-PHP CI runs on branch | TS 283/283, typecheck 0, conformance 96/96, Django 55/55, PHP-WASM 212/212, React build OK, package smoke OK |
 | 8 | Ledger + dated audit | verified | This ledger + `docs/audit/REMEDIATION_2026-11-04.md` |

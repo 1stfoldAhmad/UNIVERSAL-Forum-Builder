@@ -3,6 +3,20 @@
 Date: 2026-11-04 · Branch: `arena/1df95a3a-universal-forum-builder`
 Status labels: **Verified** · **Implemented-not-verified** · **Partial** · **Unsupported** · **Blocked** · **Not started**
 
+> **INDEPENDENT-AUDIT REMEDIATION (2026-11-04, base `main` @ `1fba279`, branch `arena/f7c0405f-universal-forum-builder`):**
+> A second focused remediation pass fixed sensitive persistence defaults, recursive operation-input resource limits, idempotency lease/recovery, canonical data-source cache keys, the Vue file picker, Expo multi-upload/partial-failure/camera behavior, durable persistence references, packaging/tarball verification, plugin renderer registration, and MCP migration diagnostics.
+> **Superseding local results:** TypeScript **283/283** (26 files), Django **55/55**, Laravel **212/212** across 10 suites (PHP-WASM 8.2), conformance **96/96**, React build 249 modules, benchmarks pass, package build/pack/fresh-external-project smoke **pass**.
+> Full finding/disposition/evidence table: `docs/audit/INDEPENDENT_REMEDIATION_2026-11-04.md`.
+>
+> **Corrections to earlier claims:**
+> - Expo does **not** support drag-and-drop (`dragDrop: false`); uploads use host-injected pickers/camera.
+> - `MemoryDraftStorage`, `MemoryOfflineQueue`, and `InMemoryIdempotencyStore` are **memory-only**, not durable production storage. Durable references now exist (Node SQLite draft/queue/idempotency; browser/Expo KeyValue adapters). Native device restart remains unverified; Node SQLite restart is verified.
+> - Production VDS Database/API/Storage/Notification/Plugin-Host integrations remain **blocked** (contracts + named TEST adapters only).
+> - Packages are built/packed/tested but **not published**.
+>
+> CI evidence: run [41880887766](https://github.com/1stfoldAhmad/UNIVERSAL-Forum-Builder/actions/runs/41880887766) (code commit `b64d004`) — **success** on all 3 jobs, including Laravel full verification on native PHP 8.2 + Illuminate + PDO SQLite and the fresh external-project package smoke test.
+
+
 > **SECURITY UPDATE (2026-11-04, branch `arena/65a47b1c-universal-forum-builder`):**
 > An independent audit of the merged implementation found P0/P1 issues in the
 > trusted execution adapters (forged body-supplied auth, client operation
@@ -75,16 +89,16 @@ Shared contracts: `@vds-form/types`, `form-spec`, `form-expressions`,
 
 | Target | Status | Evidence / limitation |
 |---|---|---|
-| Expo SDK 58 renderer | **Verified** (RN-web/jsdom) | `adapters/expo` 9 tests; capability negotiation; native pickers via host adapters. On-device run is a documented release task (no device in sandbox). |
+| Expo SDK 58 renderer | **Verified** (RN-web/jsdom) | `adapters/expo` 12 tests; capability negotiation; native pickers/camera via host adapters; **dragDrop=false**. On-device run is a documented release task (no device in sandbox). |
 | React / Next renderer | **Verified** | `adapters/react` 8 tests + live preview app (3 e2e). |
-| Vue renderer | **Verified** | `adapters/vue` 7 tests (render-function components, scoped composables). |
+| Vue renderer | **Verified** | `adapters/vue` 8 tests (render-function components, scoped composables, file-picker interaction). |
 | Angular renderer | **Verified** | `adapters/angular` 8 tests (standalone, signals, JIT). |
 | Flutter renderer | **Blocked / Not started** | No Dart/Flutter toolchain (ADR-0006). |
 | Jetpack Compose renderer | **Blocked / Not started** | No Kotlin/Gradle/Android SDK (ADR-0006). |
 | SwiftUI renderer | **Blocked / Not started** | No Swift/Xcode (ADR-0006). |
 | Node execution adapter | **Verified** | `execution-adapters/node` 31 tests incl. runtime→Node e2e + 15 adversarial security + 3 idempotency-parity. |
 | Django execution adapter | **Verified** | `execution-adapters/django` 42 tests; engine passes shared fixtures; real Django `RequestFactory` view tests. |
-| Laravel execution adapter | **Verified** | 155 checks across 6 suites (expression/form conformance, idempotency parity, trusted handler, controller auth boundary, adversarial security). PHP-WASM 8.2 locally; real PHP 8.2 + illuminate/http + pdo_sqlite in CI. |
+| Laravel execution adapter | **Verified** | 212 checks across 10 suites (expression/form conformance, idempotency parity/recovery, trusted handler, controller auth boundary, adversarial security, operation limits). PHP-WASM 8.2 locally; real PHP 8.2 + illuminate/http + pdo_sqlite in CI. |
 | Headless Node example | **Verified** | `examples/headless-node` tests. |
 | Live React preview | **Verified** | builds + serves on 0.0.0.0; proxy-host allowed. |
 

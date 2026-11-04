@@ -62,13 +62,24 @@ export function mapOptions(items: unknown[], valueKey: string, labelKey: string)
   return out;
 }
 
+/** Canonical recursive JSON serializer for cache keys: object keys sorted at
+ * every depth, arrays order-sensitive, null/primitives JSON-encoded. Unlike a
+ * shallow JSON.stringify replacer, nested filters cannot collide. */
+export function canonicalJson(value: unknown): string {
+  if (value === null || value === undefined || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(',')}}`;
+}
+
 export interface CachedEntry { response: DataSourceResponse; fetchedAt: number; paramsKey: string }
 
 /** TTL cache keyed by source id + evaluated params (deterministic key). */
 export class DataSourceCache {
   private entries = new Map<string, CachedEntry>();
   key(sourceId: string, params: Record<string, unknown>): string {
-    return `${sourceId}|${JSON.stringify(params, Object.keys(params).sort())}`;
+    return `${sourceId}|${canonicalJson(params)}`;
   }
   get(key: string, ttlMs: number, now: number): DataSourceResponse | undefined {
     const e = this.entries.get(key);

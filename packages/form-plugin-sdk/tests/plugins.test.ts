@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PluginHost, PLUGIN_CONTRACT_VERSION } from '../src/index';
+import { PluginHost, PLUGIN_CONTRACT_VERSION, RendererComponentRegistry } from '../src/index';
 import { createDefaultFieldRegistry } from '@vds-form/fields';
 import { SubmissionExecutorRegistry } from '@vds-form/submission';
 import { DataSourceProviderRegistry } from '@vds-form/data-sources';
@@ -77,5 +77,45 @@ describe('plugin host', () => {
     );
     expect(r.ok).toBe(true);
     expect(host.getExpressionFunctions().double([21])).toEqual({ ok: true, value: 42 });
+  });
+});
+
+describe('plugin renderer registration contract', () => {
+  const rcManifest = (over: Partial<PluginManifest> = {}): PluginManifest => ({
+    id: 'acme-renderers', version: '1.0.0', contractVersion: PLUGIN_CONTRACT_VERSION,
+    targets: ['*'], provides: [{ kind: 'rendererComponent', name: 'react:acme-rating' }], ...over,
+  });
+
+  it('registers, resolves, and revokes custom renderer components', () => {
+    const renderers = new RendererComponentRegistry();
+    const host = new PluginHost({ renderers, target: 'react' });
+    const component = () => null;
+    const r = host.register(rcManifest(), { rendererComponents: [{ target: 'react', fieldType: 'acme-rating', component }] });
+    expect(r.ok).toBe(true);
+    expect(renderers.get('react', 'acme-rating')?.component).toBe(component);
+    expect(host.unregister('acme-renderers').ok).toBe(true);
+    expect(renderers.has('react', 'acme-rating')).toBe(false);
+  });
+
+  it('rejects undeclared, duplicate, wrong-target, and capability-disabled renderer registrations', () => {
+    const renderers = new RendererComponentRegistry();
+    const host = new PluginHost({ renderers, target: 'react' });
+    const component = () => null;
+    expect(host.register(rcManifest({ provides: [] }), { rendererComponents: [{ target: 'react', fieldType: 'acme-rating', component }] }))
+      .toMatchObject({ ok: false, error: { code: 'PLUGIN_REGISTRATION_UNDECLARED' } });
+    expect(host.register(rcManifest(), { rendererComponents: [{ target: 'react', fieldType: 'acme-rating', component }] }).ok).toBe(true);
+    expect(host.register(rcManifest({ id: 'second' }), { rendererComponents: [{ target: 'react', fieldType: 'acme-rating', component }] }))
+      .toMatchObject({ ok: false, error: { code: 'PLUGIN_REGISTRATION_DUPLICATE' } });
+    expect(host.register(rcManifest({ id: 'vue-only', provides: [{ kind: 'rendererComponent', name: 'vue:acme-rating' }] }), { rendererComponents: [{ target: 'vue', fieldType: 'acme-rating', component }] }))
+      .toMatchObject({ ok: false, error: { code: 'PLUGIN_CONTRACT_INCOMPATIBLE' } });
+    const disabled = new PluginHost({ renderers: new RendererComponentRegistry(), capabilities: { rendererComponent: false } });
+    expect(disabled.register(rcManifest(), { rendererComponents: [{ target: 'react', fieldType: 'acme-rating', component }] }))
+      .toMatchObject({ ok: false, error: { code: 'PLUGIN_CAPABILITY_DENIED' } });
+  });
+
+  it('still rejects sandboxed/untrusted manifests for renderer plugins (no isolation claim)', () => {
+    const host = new PluginHost({ renderers: new RendererComponentRegistry() });
+    expect(host.register(rcManifest({ trust: 'sandboxed' }), { rendererComponents: [{ target: 'react', fieldType: 'acme-rating', component: () => null }] }))
+      .toMatchObject({ ok: false, error: { code: 'PLUGIN_SANDBOX_UNSUPPORTED' } });
   });
 });

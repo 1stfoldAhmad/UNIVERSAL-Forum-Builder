@@ -20,3 +20,11 @@ Status: accepted · 2026-11-04
 
 ## Consequences
 The final audit can never report 100% completion while any target lacks evidence.
+
+
+## Addendum — independent-audit remediation (2026-11-04)
+
+- Verified local totals: TS 283/283, conformance 96/96, Django 55/55, PHP-WASM 212/212, React build, package smoke.
+- Expo drag-and-drop is not claimed; camera/filePicker capabilities are conditional on injected adapters and tested behavior.
+- Packaging emits JS + declarations and is tested from packed tarballs in a fresh external project; no publication without authorization.
+- Native Expo/device storage restart and production VDS builder wiring remain unverified/blocked, not claimed.

@@ -43,31 +43,47 @@ export function scopedIdempotencyKey(parts: {
   ]), 'utf8').digest('hex');
 }
 
+export const DEFAULT_IDEMPOTENCY_LEASE_MS = 5 * 60 * 1000;
+
+export interface IdempotencyClaimOptions { leaseMs?: number; now?: number }
+
 export type IdempotencyClaim =
   | { kind: 'claimed' }
   | { kind: 'replay'; result: SubmissionResult }
   | { kind: 'conflict' }
-  | { kind: 'in-progress' };
+  | { kind: 'in-progress' }
+  | { kind: 'expired'; claimedAt: number; leaseExpiresAt: number };
+
+/** Host integration contract for abandoned claims. The store NEVER re-executes
+ * an expired claim automatically: the host must reconcile the operation outcome
+ * (transaction/outbox) and then `complete` with the known result or `release`
+ * only when the operation provably did not commit. */
+export interface IdempotencyRecoveryContract {
+  reconcile(key: string, fingerprint: string): Promise<{ committed: true; result: SubmissionResult } | { committed: false }>;
+}
 
 export interface IdempotencyStore {
   /** Atomically claim a scoped key for a payload fingerprint. */
-  claim(key: string, fingerprint: string): IdempotencyClaim | Promise<IdempotencyClaim>;
+  claim(key: string, fingerprint: string, opts?: IdempotencyClaimOptions): IdempotencyClaim | Promise<IdempotencyClaim>;
   /** Record the successful result for a claimed key. */
   complete(key: string, result: SubmissionResult): void | Promise<void>;
   /** Release an in-progress claim after a failed execution so retries can run. */
   release(key: string): void | Promise<void>;
 }
 
-interface Record_ { fingerprint: string; status: 'in-progress' | 'complete'; result?: SubmissionResult }
+interface Record_ { fingerprint: string; status: 'in-progress' | 'complete'; result?: SubmissionResult; claimedAt: number; leaseExpiresAt: number }
 
 /** Single-process atomic store (JS event loop makes claim/complete/release atomic). NOT durable. */
 export class InMemoryIdempotencyStore implements IdempotencyStore {
   private records = new Map<string, Record_>();
-  claim(key: string, fingerprint: string): IdempotencyClaim {
+  claim(key: string, fingerprint: string, opts: IdempotencyClaimOptions = {}): IdempotencyClaim {
+    const now = opts.now ?? Date.now();
+    const leaseMs = opts.leaseMs ?? DEFAULT_IDEMPOTENCY_LEASE_MS;
     const rec = this.records.get(key);
-    if (!rec) { this.records.set(key, { fingerprint, status: 'in-progress' }); return { kind: 'claimed' }; }
+    if (!rec) { this.records.set(key, { fingerprint, status: 'in-progress', claimedAt: now, leaseExpiresAt: leaseMs > 0 ? now + leaseMs : 0 }); return { kind: 'claimed' }; }
     if (rec.fingerprint !== fingerprint) return { kind: 'conflict' };
     if (rec.status === 'complete' && rec.result) return { kind: 'replay', result: rec.result };
+    if (rec.leaseExpiresAt > 0 && now > rec.leaseExpiresAt) return { kind: 'expired', claimedAt: rec.claimedAt, leaseExpiresAt: rec.leaseExpiresAt };
     return { kind: 'in-progress' };
   }
   complete(key: string, result: SubmissionResult): void {
@@ -99,19 +115,28 @@ export class SqliteIdempotencyStore implements IdempotencyStore {
       fingerprint TEXT NOT NULL,
       status TEXT NOT NULL CHECK (status IN ('in-progress','complete')),
       result_json TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      claimed_at INTEGER NOT NULL DEFAULT 0,
+      lease_expires_at INTEGER NOT NULL DEFAULT 0
     )`);
+    for (const col of ['claimed_at INTEGER NOT NULL DEFAULT 0', 'lease_expires_at INTEGER NOT NULL DEFAULT 0']) {
+      try { this.db.exec(`ALTER TABLE vds_form_idempotency ADD COLUMN ${col}`); } catch { /* already present */ }
+    }
   }
-  claim(key: string, fingerprint: string): IdempotencyClaim {
+  claim(key: string, fingerprint: string, opts: IdempotencyClaimOptions = {}): IdempotencyClaim {
+    const now = opts.now ?? Date.now();
+    const leaseMs = opts.leaseMs ?? DEFAULT_IDEMPOTENCY_LEASE_MS;
+    const leaseExpiresAt = leaseMs > 0 ? now + leaseMs : 0;
     try {
-      this.db.prepare(`INSERT INTO vds_form_idempotency (key, fingerprint, status) VALUES (?, ?, 'in-progress')`).run(key, fingerprint);
+      this.db.prepare(`INSERT INTO vds_form_idempotency (key, fingerprint, status, claimed_at, lease_expires_at) VALUES (?, ?, 'in-progress', ?, ?)`).run(key, fingerprint, now, leaseExpiresAt);
       return { kind: 'claimed' };
     } catch {
-      const row = this.db.prepare(`SELECT fingerprint, status, result_json FROM vds_form_idempotency WHERE key = ?`).get(key) as
-        | { fingerprint: string; status: string; result_json: string | null } | undefined;
+      const row = this.db.prepare(`SELECT fingerprint, status, result_json, claimed_at, lease_expires_at FROM vds_form_idempotency WHERE key = ?`).get(key) as
+        | { fingerprint: string; status: string; result_json: string | null; claimed_at: number; lease_expires_at: number } | undefined;
       if (!row) return { kind: 'in-progress' };
       if (row.fingerprint !== fingerprint) return { kind: 'conflict' };
       if (row.status === 'complete' && row.result_json) return { kind: 'replay', result: JSON.parse(row.result_json) as SubmissionResult };
+      if (row.lease_expires_at > 0 && now > row.lease_expires_at) return { kind: 'expired', claimedAt: row.claimed_at, leaseExpiresAt: row.lease_expires_at };
       return { kind: 'in-progress' };
     }
   }

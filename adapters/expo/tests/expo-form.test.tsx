@@ -148,3 +148,65 @@ describe('Expo renderer (React Native primitives via react-native-web test alias
     controller.dispose();
   });
 });
+
+describe('Expo picker/upload behaviors (injected adapters)', () => {
+  const doc = {
+    format: 'vds.form', specVersion: '1.0.0', id: 'upload-test', metadata: { name: 'Uploads' },
+    fields: [
+      { id: 'docs', type: 'file', key: 'docs', label: 'Documents', validation: { multiple: true } },
+      { id: 'selfie', type: 'image', key: 'selfie', label: 'Selfie' },
+    ],
+  };
+  const ir = (() => { const r = compileForm(doc as never); if (!r.ok) throw new Error(JSON.stringify(r.diagnostics)); return r.ir; })();
+  const asset = (id: string, name: string): NormalizedAsset => ({ id, name, mimeType: 'image/png', sizeBytes: 10, source: 'picker' });
+
+  it('processes all selected documents and preserves successful uploads on partial failure', async () => {
+    const uploadProvider = new TestUploadProvider();
+    const original = uploadProvider.upload.bind(uploadProvider);
+    uploadProvider.upload = async (req) => {
+      if (req.asset.id === 'bad') throw new Error('UPLOAD_FAILED');
+      return original(req);
+    };
+    const pickDocument = vi.fn(async () => [asset('a1', 'a1.png'), asset('bad', 'bad.png'), asset('a3', 'a3.png')]);
+    const controller = new FormController({ ir, uploadProvider });
+    await controller.initialize();
+    render(<ExpoForm controller={controller} pickers={{ pickDocument }} />);
+    fireEvent.click(screen.getByTestId('pick-docs'));
+    await waitFor(() => expect(screen.getByTestId('asset-docs').textContent).toContain('a3.png'));
+    const value = controller.getFieldValue('docs') as Array<{ name: string }>;
+    expect(value.map((v) => v.name)).toEqual(['a1.png', 'a3.png']);
+    expect(screen.getByTestId('upload-error-docs').textContent).toContain('bad.png');
+    expect(uploadProvider.assets.size).toBe(2);
+    controller.dispose();
+  });
+
+  it('preserves previously uploaded assets when adding more', async () => {
+    const uploadProvider = new TestUploadProvider();
+    const existing = await uploadProvider.upload({ asset: asset('old', 'old.png') });
+    const pickDocument = vi.fn(async () => [asset('new', 'new.png')]);
+    const controller = new FormController({ ir, uploadProvider });
+    await controller.initialize();
+    controller.setFieldValue('docs', [existing]);
+    render(<ExpoForm controller={controller} pickers={{ pickDocument }} />);
+    fireEvent.click(screen.getByTestId('pick-docs'));
+    await waitFor(() => expect(screen.getByTestId('asset-docs').textContent).toContain('new.png'));
+    const value = controller.getFieldValue('docs') as Array<{ name: string }>;
+    expect(value.map((v) => v.name)).toEqual(['old.png', 'new.png']);
+    controller.dispose();
+  });
+
+  it('camera adapter uploads a captured photo and is advertised only when injected', async () => {
+    const uploadProvider = new TestUploadProvider();
+    const captureCamera = vi.fn(async () => asset('cam', 'cam.png'));
+    const controller = new FormController({ ir, uploadProvider });
+    await controller.initialize();
+    render(<ExpoForm controller={controller} pickers={{ captureCamera }} />);
+    fireEvent.click(screen.getByTestId('camera-selfie'));
+    await waitFor(() => expect(screen.getByTestId('asset-selfie').textContent).toContain('cam.png'));
+    expect(captureCamera).toHaveBeenCalled();
+    expect((controller.getFieldValue('selfie') as { assetRef: string }).assetRef).toBe('test-asset-1');
+    expect(createExpoCapabilityManifest({ captureCamera }).features.camera).toBe(true);
+    expect(createExpoCapabilityManifest().features.camera).toBe(false);
+    controller.dispose();
+  });
+});

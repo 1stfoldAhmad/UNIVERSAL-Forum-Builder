@@ -29,6 +29,8 @@ const all = [
   'run-security.php',
   'run-security-policy.php',
   'run-remediation.php',
+  'run-operation-limits.php',
+  'run-idempotency-recovery.php',
 ];
 const requested = process.argv.slice(2);
 const suites = requested.length ? requested : all;

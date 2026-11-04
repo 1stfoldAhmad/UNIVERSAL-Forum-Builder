@@ -10,6 +10,7 @@ namespace VdsForm;
 final class Policy
 {
     private const FORBIDDEN = ['__proto__' => true, 'prototype' => true, 'constructor' => true];
+    private const OP_LIMITS = ['maxDepth' => 64, 'maxNodes' => 10000, 'maxStringLength' => 10000, 'maxArrayLength' => 1000, 'maxObjectKeys' => 1000];
     private const MAX_DEPTH = 64;
     private const MAX_NODES = 10000;
     private const ASSET_KEYS = ['id' => true, 'name' => true, 'mimeType' => true, 'sizeBytes' => true, 'source' => true, 'localUri' => true, 'assetRef' => true, 'url' => true];
@@ -178,26 +179,29 @@ final class Policy
     {
         $out = []; $issues = [];
         if (!$defs) return [$out, $issues];
-        $check = function (array $d, $value, string $path) use (&$check, &$issues) {
-            if ($value === null) { if (!empty($d['required'])) $issues[] = self::issue('OPERATION_INPUT_REQUIRED', 'Required operation input is missing.', $path); return null; }
-            if (!self::typeMatches($value, $d['valueType'] ?? 'string')) { $issues[] = self::issue('OPERATION_INPUT_TYPE_INVALID', 'Expected ' . ($d['valueType'] ?? 'string') . '.', $path); return null; }
+        $nodes = 0; $lim = self::OP_LIMITS;
+        $check = function (?array $d, $value, string $path, int $depth) use (&$check, &$issues, &$nodes, $lim) {
+            if ($depth > $lim['maxDepth']) { $issues[] = self::issue('OPERATION_INPUT_TOO_DEEP', 'Operation input exceeds maximum nesting depth.', $path); return null; }
+            $nodes++;
+            if ($nodes > $lim['maxNodes']) { $issues[] = self::issue('OPERATION_INPUT_TOO_MANY_NODES', 'Operation input exceeds maximum node count.', $path); return null; }
+            if ($value === null) { if ($d !== null && !empty($d['required'])) $issues[] = self::issue('OPERATION_INPUT_REQUIRED', 'Required operation input is missing.', $path); return null; }
+            if (is_string($value) && strlen($value) > $lim['maxStringLength']) { $issues[] = self::issue('OPERATION_INPUT_STRING_TOO_LARGE', 'Operation input string exceeds maximum length.', $path); return null; }
+            if ($d !== null && !self::typeMatches($value, $d['valueType'] ?? 'string')) { $issues[] = self::issue('OPERATION_INPUT_TYPE_INVALID', 'Expected ' . ($d['valueType'] ?? 'string') . '.', $path); return null; }
             if (is_array($value) && array_is_list($value)) {
-                if (empty($d['items'])) return $value;
+                if (count($value) > $lim['maxArrayLength']) { $issues[] = self::issue('OPERATION_INPUT_ARRAY_TOO_LARGE', 'Operation input array exceeds maximum length.', $path); return null; }
+                $items = $d['items'] ?? null;
                 $cleaned = [];
-                foreach ($value as $i => $item) { $c = $check($d['items'], $item, $path . '.' . $i); if ($c !== null) $cleaned[] = $c; }
+                foreach ($value as $i => $item) { $c = $check($items, $item, $path . '.' . $i, $depth + 1); if ($c !== null) $cleaned[] = $c; }
                 return $cleaned;
             }
             if (is_array($value)) {
+                if (count($value) > $lim['maxObjectKeys']) { $issues[] = self::issue('OPERATION_INPUT_OBJECT_TOO_LARGE', 'Operation input object exceeds maximum property count.', $path); return null; }
                 $obj = [];
                 foreach ($value as $k => $v) {
                     if (isset(self::FORBIDDEN[(string)$k])) { $issues[] = self::issue('UNSAFE_PROPERTY', 'Prototype-pollution property rejected.', $path . '.' . $k); continue; }
-                    $child = $d['properties'][$k] ?? null;
-                    if ($child === null) {
-                        if (empty($d['additionalProperties'])) $issues[] = self::issue('UNKNOWN_PROPERTY', 'Operation input property is not declared.', $path . '.' . $k);
-                        else $obj[$k] = $v;
-                        continue;
-                    }
-                    $c = $check($child, $v, $path . '.' . $k);
+                    $child = $d !== null ? ($d['properties'][$k] ?? null) : null;
+                    if ($child === null && $d !== null && empty($d['additionalProperties'])) { $issues[] = self::issue('UNKNOWN_PROPERTY', 'Operation input property is not declared.', $path . '.' . $k); continue; }
+                    $c = $check($child, $v, $path . '.' . $k, $depth + 1);
                     if ($c !== null) $obj[$k] = $c;
                 }
                 return $obj;
@@ -206,7 +210,7 @@ final class Policy
         };
         foreach ($defs as $name => $d) {
             if (isset(self::FORBIDDEN[(string)$name])) { $issues[] = self::issue('UNSAFE_PROPERTY', 'Operation input name rejected.', (string)$name); continue; }
-            $c = $check($d, $values[$name] ?? null, (string)$name);
+            $c = $check($d, $values[$name] ?? null, (string)$name, 0);
             if ($c !== null) $out[$name] = $c;
         }
         return [$out, $issues];
