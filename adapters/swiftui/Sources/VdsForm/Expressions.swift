@@ -89,8 +89,11 @@ public enum Expressions {
         if isBool(v) { return (v as! NSNumber).boolValue ? "true" : "false" }
         if let s = v as? String { return s }
         if let n = v as? NSNumber { return n.stringValue }
-        if let data = try? JSONSerialization.data(withJSONObject: v as Any, options: [.sortedKeys]), let s = String(data: data, encoding: .utf8) { return s }
-        return "\(v ?? "")"
+        if (v is [Any] || v is [String: Any]), JSONSerialization.isValidJSONObject(v as Any),
+           let data = try? JSONSerialization.data(withJSONObject: v as Any, options: [.sortedKeys]),
+           let s = String(data: data, encoding: .utf8) { return s }
+        if v == nil || v is NSNull { return "" }
+        return "\(v!)"
     }
 
     public static func roundHalfAway(_ x: Double, _ digits: Int) -> Double {
