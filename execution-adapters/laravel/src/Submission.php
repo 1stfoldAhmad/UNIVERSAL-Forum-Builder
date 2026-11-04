@@ -6,8 +6,18 @@
  * against a registered OperationRegistry; missing operations fail with
  * SUBMISSION_OPERATION_UNRESOLVED. Audit records value PATHS only, never values.
  *
+ * SECURITY BOUNDARY (audit P0/P1), identical to the Node and Django adapters:
+ * - $auth is a SEPARATE, server-derived argument, never read from the client
+ *   request payload. The Laravel controller derives it from $request->user() /
+ *   validated token claims — never from the body.
+ * - The executed operation is bound to the compiled FormIR (and an optional
+ *   server-side allowlist); a client cannot select or override it.
+ * - Idempotency is checked only AFTER authentication, authorization and version
+ *   checks; keys are scoped by tenant+user+form+operation and carry a canonical
+ *   payload fingerprint; claims are atomic. See Idempotency.php.
+ *
  * Operates on the shared deterministic FormIR (compile once with the TS compiler:
- * `vds-form compile --json`). STATUS: implemented-not-verified (no PHP runtime).
+ * `vds-form compile --json`).
  */
 declare(strict_types=1);
 
@@ -44,14 +54,16 @@ final class TrustedSubmissionHandler
     private OperationRegistry $operations;
     private $rbac;
     private $audit;
-    private array $idempotency;
+    private IdempotencyStore $idempotency;
+    private ?array $allowedOperations;
 
-    public function __construct(array $forms, OperationRegistry $operations, $rbac = null, ?callable $audit = null, ?array &$idempotencyStore = null)
+    public function __construct(array $forms, OperationRegistry $operations, $rbac = null, ?callable $audit = null, ?IdempotencyStore $idempotencyStore = null, ?array $allowedOperations = null)
     {
         $this->operations = $operations;
         $this->rbac = $rbac;
         $this->audit = $audit;
-        $this->idempotency = $idempotencyStore ?? [];
+        $this->idempotency = $idempotencyStore ?? new InMemoryIdempotencyStore();
+        $this->allowedOperations = $allowedOperations;
         foreach ($forms as $formId => $ir) {
             if (!isset($ir['irVersion'])) throw new \RuntimeException("FORM_IR_REQUIRED ($formId): register a compiled FormIR (vds-form compile --json).");
             $this->irs[$formId] = $ir;
@@ -85,33 +97,46 @@ final class TrustedSubmissionHandler
         return ['code' => $code, 'message' => $message, 'path' => $path, 'severity' => 'error', 'source' => 'server'];
     }
 
-    public function handle(array $request): array
+    /**
+     * Handle a submission. $auth is the SERVER-DERIVED principal; it must never
+     * be taken from the client request body.
+     */
+    public function handle(array $request, ?array $auth = null): array
     {
         $started = microtime(true);
         $ir = $this->irs[$request['formId']] ?? null;
         if ($ir === null) return ['status' => 'config-error', 'code' => 'SUBMISSION_OPERATION_UNRESOLVED', 'message' => "Form \"{$request['formId']}\" is not registered on this server."];
         $submission = $ir['submission'] ?? [];
-        $operationRef = $request['operationRef'] ?? ($submission['operationRef'] ?? '');
         $reqValues = $request['values'] ?? [];
 
-        $audit = function (array $result, array $issueCodes = []) use ($ir, $operationRef, $request, $reqValues): void {
+        $audit = function (array $result, string $operationRef, array $issueCodes = []) use ($ir, $request, $reqValues, $auth): void {
             if (!$this->audit) return;
             ($this->audit)([
                 'timestamp' => gmdate('c'), 'formId' => $ir['formId'], 'formVersion' => $ir['formVersion'],
                 'operationRef' => $operationRef, 'correlationId' => $request['correlationId'] ?? '',
                 'idempotencyKey' => $request['idempotencyKey'],
-                'userId' => $request['auth']['userId'] ?? null, 'tenantId' => $request['auth']['tenantId'] ?? null,
+                'userId' => $auth['userId'] ?? null, 'tenantId' => $auth['tenantId'] ?? null,
                 'outcome' => $result['status'], 'issueCodes' => $issueCodes,
                 'valuePaths' => array_keys($reqValues),
             ]);
         };
 
-        $cacheKey = $request['formId'] . '|' . $request['idempotencyKey'];
-        if (isset($this->idempotency[$cacheKey])) { $cached = $this->idempotency[$cacheKey]; $audit($cached, ['IDEMPOTENT_REPLAY']); return $cached; }
+        // Operation binding: from the compiled FormIR, never from the client.
+        $operationRef = $submission['operationRef'] ?? '';
+        if (array_key_exists('operationRef', $request) && $request['operationRef'] !== null && $request['operationRef'] !== $operationRef) {
+            $result = ['status' => 'permission-denied', 'code' => 'OPERATION_OVERRIDE_FORBIDDEN', 'message' => 'The requested operation does not match the operation configured for this form.'];
+            $audit($result, $operationRef, ['OPERATION_OVERRIDE_FORBIDDEN']);
+            return $result;
+        }
+        if ($this->allowedOperations !== null && !in_array($operationRef, $this->allowedOperations, true)) {
+            $result = ['status' => 'permission-denied', 'code' => 'OPERATION_NOT_ALLOWED', 'message' => "Operation \"$operationRef\" is not in the server allowlist."];
+            $audit($result, $operationRef, ['OPERATION_NOT_ALLOWED']);
+            return $result;
+        }
 
         if (!empty($request['formVersion']) && $request['formVersion'] !== $ir['formVersion']) {
             $result = ['status' => 'server-validation-failed', 'issues' => [self::serverIssue('FORM_VERSION_MISMATCH', "Client form version {$request['formVersion']} != server {$ir['formVersion']}.")]];
-            $audit($result, ['FORM_VERSION_MISMATCH']);
+            $audit($result, $operationRef, ['FORM_VERSION_MISMATCH']);
             return $result;
         }
 
@@ -130,7 +155,7 @@ final class TrustedSubmissionHandler
         if (!$validation['valid']) {
             $issues = array_map(fn($i) => array_merge($i, ['source' => 'server']), $validation['issues']);
             $result = ['status' => 'server-validation-failed', 'issues' => $issues];
-            $audit($result, array_map(fn($i) => $i['code'], $validation['issues']));
+            $audit($result, $operationRef, array_map(fn($i) => $i['code'], $validation['issues']));
             return $result;
         }
 
@@ -139,13 +164,13 @@ final class TrustedSubmissionHandler
         if ($required) {
             if ($this->rbac === null) {
                 $result = ['status' => 'permission-denied', 'code' => 'RBAC_NOT_CONFIGURED', 'message' => 'Form declares submitPermissions but no RBAC evaluator is registered on the server.', 'requiredPermissions' => $required];
-                $audit($result, ['RBAC_NOT_CONFIGURED']);
+                $audit($result, $operationRef, ['RBAC_NOT_CONFIGURED']);
                 return $result;
             }
-            $decision = $this->rbac->evaluate($request['auth'] ?? null, $required);
+            $decision = $this->rbac->evaluate($auth, $required);
             if (!$decision['allowed']) {
                 $result = ['status' => 'permission-denied', 'code' => 'PERMISSION_DENIED', 'message' => 'Missing permissions: ' . implode(', ', $decision['missing']), 'requiredPermissions' => $decision['missing']];
-                $audit($result, ['PERMISSION_DENIED']);
+                $audit($result, $operationRef, ['PERMISSION_DENIED']);
                 return $result;
             }
         }
@@ -158,10 +183,10 @@ final class TrustedSubmissionHandler
             if (!$field) continue;
             $provided = Expressions::getPath($values, $field['key']);
             if ($provided === null) continue;
-            $decision = $this->rbac ? $this->rbac->evaluate($request['auth'] ?? null, $writePerms) : ['allowed' => false, 'missing' => $writePerms];
+            $decision = $this->rbac ? $this->rbac->evaluate($auth, $writePerms) : ['allowed' => false, 'missing' => $writePerms];
             if (!$decision['allowed']) {
                 $result = ['status' => 'permission-denied', 'code' => 'FIELD_WRITE_DENIED', 'message' => "Not permitted to write field \"{$field['key']}\".", 'requiredPermissions' => $decision['missing']];
-                $audit($result, ['FIELD_WRITE_DENIED']);
+                $audit($result, $operationRef, ['FIELD_WRITE_DENIED']);
                 return $result;
             }
         }
@@ -169,23 +194,47 @@ final class TrustedSubmissionHandler
         $handler = $this->operations->resolve($operationRef);
         if ($handler === null) {
             $result = ['status' => 'config-error', 'code' => 'SUBMISSION_OPERATION_UNRESOLVED', 'message' => "Operation \"$operationRef\" is not registered on this server."];
-            $audit($result, ['SUBMISSION_OPERATION_UNRESOLVED']);
+            $audit($result, $operationRef, ['SUBMISSION_OPERATION_UNRESOLVED']);
+            return $result;
+        }
+
+        // Idempotency AFTER auth/authz/version. Scoped key + fingerprint + atomic claim.
+        $scopeKey = Idempotency::scopedIdempotencyKey($auth['tenantId'] ?? null, $auth['userId'] ?? null, $ir['formId'], $operationRef, $request['idempotencyKey']);
+        $fingerprint = Idempotency::payloadFingerprint($reqValues);
+        $claim = $this->idempotency->claim($scopeKey, $fingerprint);
+        if ($claim['kind'] === 'replay') { $audit($claim['result'], $operationRef, ['IDEMPOTENT_REPLAY']); return $claim['result']; }
+        if ($claim['kind'] === 'conflict') {
+            $result = ['status' => 'business-rejected', 'code' => 'IDEMPOTENCY_KEY_CONFLICT', 'message' => 'This idempotency key was already used with a different payload.'];
+            $audit($result, $operationRef, ['IDEMPOTENCY_KEY_CONFLICT']);
+            return $result;
+        }
+        if ($claim['kind'] === 'in-progress') {
+            $result = ['status' => 'business-rejected', 'code' => 'IDEMPOTENCY_IN_PROGRESS', 'message' => 'A submission with this idempotency key is already in progress.'];
+            $audit($result, $operationRef, ['IDEMPOTENCY_IN_PROGRESS']);
             return $result;
         }
 
         try {
-            $data = $handler($reqValues, ['auth' => $request['auth'] ?? null, 'idempotencyKey' => $request['idempotencyKey'], 'correlationId' => $request['correlationId'] ?? '', 'formId' => $ir['formId']]);
+            $data = $handler($reqValues, ['auth' => $auth, 'idempotencyKey' => $request['idempotencyKey'], 'correlationId' => $request['correlationId'] ?? '', 'formId' => $ir['formId']]);
             $result = ['status' => 'succeeded', 'operationRef' => $operationRef, 'data' => $data, 'idempotencyKey' => $request['idempotencyKey'], 'durationMs' => (int)((microtime(true) - $started) * 1000)];
         } catch (\Throwable $e) {
-            $issues = property_exists($e, 'issues') ? $e->issues : null;
-            $code = property_exists($e, 'code') ? $e->code : null;
+            // Read only PUBLIC custom properties. Standard Exception::$code is
+            // protected (accessing it throws), so property_exists() alone is unsafe.
+            $readPublic = static function (\Throwable $ex, string $prop) {
+                if (!property_exists($ex, $prop)) return null;
+                $ref = new \ReflectionProperty($ex, $prop);
+                return $ref->isPublic() ? $ref->getValue($ex) : null;
+            };
+            $issues = $readPublic($e, 'issues');
+            $code = $readPublic($e, 'code');
             if ($issues) $result = ['status' => 'server-validation-failed', 'issues' => array_map(fn($i) => array_merge($i, ['source' => 'server']), $issues)];
             elseif ($code === 'PERMISSION_DENIED') $result = ['status' => 'permission-denied', 'code' => $code, 'message' => $e->getMessage() ?: 'Denied by operation.'];
             else $result = ['status' => 'business-rejected', 'code' => $code ?: 'OPERATION_FAILED', 'message' => $e->getMessage() ?: 'Operation failed.'];
         }
 
-        if ($result['status'] === 'succeeded') $this->idempotency[$cacheKey] = $result;
-        $audit($result, array_map(fn($i) => $i['code'], $result['issues'] ?? []));
+        if ($result['status'] === 'succeeded') $this->idempotency->complete($scopeKey, $result);
+        else $this->idempotency->release($scopeKey);
+        $audit($result, $operationRef, array_map(fn($i) => $i['code'], $result['issues'] ?? []));
         return $result;
     }
 }

@@ -52,13 +52,17 @@ jobs:
         run: cd execution-adapters/django && python3 -m pytest -q
 
   laravel:
-    name: Laravel/PHP trusted adapter (shared conformance)
+    name: Laravel/PHP trusted adapter (full verification)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
+          extensions: mbstring, pdo_sqlite
           coverage: none
-      - name: Run PHP expression conformance against shared fixtures
-        run: cd execution-adapters/laravel && php tests/run-conformance.php
+          tools: composer:v2
+      - name: Install Composer dev deps (illuminate/http for the real-Request integration check)
+        run: cd execution-adapters/laravel && composer update --no-interaction --prefer-dist --no-progress
+      - name: Run all PHP suites (expression + form conformance, idempotency parity, trusted handler, controller, security)
+        run: cd execution-adapters/laravel && composer test

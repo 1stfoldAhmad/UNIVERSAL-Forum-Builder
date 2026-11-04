@@ -1,5 +1,8 @@
-"""Django HTTP view integration test. Skips if Django is not installed (the
-framework-free core tests never require it)."""
+"""Django HTTP view integration tests. Skips if Django is not installed (the
+framework-free core tests never require it).
+
+These exercise the P0 security boundary: auth is derived from the server-side
+principal / a host auth_resolver, NEVER from the request body."""
 import json
 import os
 import sys
@@ -33,10 +36,24 @@ def _handler(rbac=None, security=None):
     return TrustedSubmissionHandler({"contact": ir}, ops, rbac=rbac)
 
 
-def _post(view, body):
+def _post(view, body, user=None):
     rf = RequestFactory()
     request = rf.post("/api/forms/submit", data=json.dumps(body), content_type="application/json")
+    if user is not None:
+        request.user = user
     return view(request)
+
+
+class _User:
+    """Minimal authenticated principal stand-in for request.user."""
+    def __init__(self, pk, perms=(), tenant_id=None):
+        self.pk = pk
+        self.is_authenticated = True
+        self._perms = set(perms)
+        self.tenant_id = tenant_id
+
+    def get_all_permissions(self):
+        return self._perms
 
 
 def test_view_success_returns_200():
@@ -53,11 +70,53 @@ def test_view_validation_failure_returns_422():
     assert json.loads(resp.content)["status"] == "server-validation-failed"
 
 
-def test_view_permission_denied_returns_403():
+def test_view_rejects_auth_in_body():
+    # P0: any attempt to supply authorization in the body is rejected outright.
     view = create_submission_view(_handler(rbac=SimpleRbacEvaluator(), security={"submitPermissions": ["contact:create"]}))
-    resp = _post(view, {"formId": "contact", "values": VALID, "idempotencyKey": "k", "correlationId": "c", "auth": {"permissions": []}})
+    resp = _post(view, {"formId": "contact", "values": VALID, "idempotencyKey": "k", "correlationId": "c",
+                        "auth": {"userId": "attacker", "permissions": ["*"]}})
+    assert resp.status_code == 400
+    assert json.loads(resp.content)["code"] == "AUTH_IN_BODY_FORBIDDEN"
+
+
+def test_view_gated_form_denies_anonymous():
+    # No request.user → auth=None → fail-closed RBAC denies the gated form.
+    view = create_submission_view(_handler(rbac=SimpleRbacEvaluator(), security={"submitPermissions": ["contact:create"]}))
+    resp = _post(view, {"formId": "contact", "values": VALID, "idempotencyKey": "k", "correlationId": "c"})
     assert resp.status_code == 403
     assert json.loads(resp.content)["code"] == "PERMISSION_DENIED"
+
+
+def test_view_gated_form_allows_authenticated_user_with_permission():
+    view = create_submission_view(_handler(rbac=SimpleRbacEvaluator(), security={"submitPermissions": ["contact:create"]}))
+    user = _User(pk=7, perms=["contact:create"])
+    resp = _post(view, {"formId": "contact", "values": VALID, "idempotencyKey": "k", "correlationId": "c"}, user=user)
+    assert resp.status_code == 200
+    assert json.loads(resp.content)["status"] == "succeeded"
+
+
+def test_view_gated_form_denies_authenticated_user_without_permission():
+    view = create_submission_view(_handler(rbac=SimpleRbacEvaluator(), security={"submitPermissions": ["contact:create"]}))
+    user = _User(pk=7, perms=[])
+    resp = _post(view, {"formId": "contact", "values": VALID, "idempotencyKey": "k", "correlationId": "c"}, user=user)
+    assert resp.status_code == 403
+    assert json.loads(resp.content)["code"] == "PERMISSION_DENIED"
+
+
+def test_view_auth_resolver_reads_verified_claims():
+    # Host token-claims resolver is the ONLY source of auth besides request.user.
+    def resolver(request):
+        return {"userId": "token-user", "tenantId": "t9", "roles": [], "permissions": ["contact:create"]}
+    view = create_submission_view(_handler(rbac=SimpleRbacEvaluator(), security={"submitPermissions": ["contact:create"]}), auth_resolver=resolver)
+    resp = _post(view, {"formId": "contact", "values": VALID, "idempotencyKey": "k", "correlationId": "c"})
+    assert resp.status_code == 200
+
+
+def test_view_allow_anonymous_false_requires_auth():
+    view = create_submission_view(_handler(), allow_anonymous=False)
+    resp = _post(view, {"formId": "contact", "values": VALID, "idempotencyKey": "k", "correlationId": "c"})
+    assert resp.status_code == 401
+    assert json.loads(resp.content)["code"] == "AUTH_REQUIRED"
 
 
 def test_view_rejects_non_post():

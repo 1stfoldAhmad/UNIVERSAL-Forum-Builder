@@ -1,0 +1,16 @@
+{
+  "description": "Cross-language idempotency parity vectors. The canonical JSON, SHA-256 payload fingerprint, and scoped key MUST be byte-identical across the TypeScript, Python, and PHP execution adapters so a shared durable store behaves consistently.",
+  "canonical": [
+    { "input": { "b": 1, "a": { "d": 2, "c": 3 } }, "expected": "{\"a\":{\"c\":3,\"d\":2},\"b\":1}" },
+    { "input": { "z": [3, 1, 2], "a": "x" }, "expected": "{\"a\":\"x\",\"z\":[3,1,2]}" },
+    { "input": { "name": "Ada", "nested": { "ok": true, "n": null } }, "expected": "{\"name\":\"Ada\",\"nested\":{\"n\":null,\"ok\":true}}" }
+  ],
+  "fingerprint": [
+    { "input": { "name": "Ada", "email": "ada@example.com" }, "expected": "0eb622e4ef1d18f5925187f8d498e9c4f289772f5663b163cfed706d146034e5" },
+    { "input": { "type": "business", "companyName": "Acme", "age": 30 }, "expected": "d075e9eabcdc70afa63f86bd59a803018829841ca9238b0bd6631f70081a1d2f" }
+  ],
+  "scopedKey": [
+    { "input": { "tenantId": "t1", "userId": "u1", "formId": "contact", "operationRef": "test:contact.create", "idempotencyKey": "key-1" }, "expected": "572ad1468f0791eaee593579201d42371f1b82b06e8166b83a596934205c41ff" },
+    { "input": { "tenantId": null, "userId": null, "formId": "contact", "operationRef": "test:contact.create", "idempotencyKey": "anon" }, "expected": "7f69ef82f1d5ece16d6ceb38374e5bd77642306f732abcaae41274dd2c5623f9" }
+  ]
+}

@@ -1,10 +1,19 @@
-"""
-Trusted server-side submission handler — Python port of
+"""Trusted server-side submission handler — Python port of
 execution-adapters/node. Re-validates and re-authorizes EVERY submission;
 client-side hiding is never authorization. Operations resolve against a
 registered OperationRegistry (VDS Database/API Builder contracts) — there is no
 generic endpoint and no fake submit(). Missing operations fail with
 SUBMISSION_OPERATION_UNRESOLVED. Audit records value PATHS only, never values.
+
+SECURITY BOUNDARY (audit P0/P1), identical to the Node adapter:
+- ``auth`` is a SEPARATE, server-derived argument, never read from the client
+  request payload. The Django view derives it from request.user / validated
+  token claims — never from the body.
+- The executed operation is bound to the compiled FormIR (and an optional
+  server-side allowlist); a client cannot select or override it.
+- Idempotency is checked only AFTER authentication, authorization and version
+  checks; keys are scoped by tenant+user+form+operation and carry a canonical
+  payload fingerprint; claims are atomic. See idempotency.py.
 
 The handler operates on the deterministic FormIR (shared cross-language
 contract). Hosts compile once with the TS compiler (`vds-form compile --json`)
@@ -14,12 +23,14 @@ from __future__ import annotations
 
 import re
 import time
-import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from .expressions import get_path
 from .validation import compute_effective_state, validate_values
+from .idempotency import (
+    InMemoryIdempotencyStore, payload_fingerprint, scoped_idempotency_key,
+)
 
 
 def set_in(root: Any, path: str, value: Any) -> Any:
@@ -81,12 +92,14 @@ def _server_issue(code: str, message: str, path: str = "") -> Dict[str, Any]:
 class TrustedSubmissionHandler:
     def __init__(self, forms: Dict[str, Dict[str, Any]], operations: OperationRegistry,
                  rbac: Any = None, audit: Optional[Callable[[Dict[str, Any]], None]] = None,
-                 idempotency_store: Optional[Dict[str, Any]] = None) -> None:
+                 idempotency_store: Any = None,
+                 allowed_operations: Optional[List[str]] = None) -> None:
         self.irs: Dict[str, Dict[str, Any]] = {}
         self.operations = operations
         self.rbac = rbac
         self.audit = audit
-        self.idempotency = idempotency_store if idempotency_store is not None else {}
+        self.idempotency = idempotency_store if idempotency_store is not None else InMemoryIdempotencyStore()
+        self.allowed_operations = set(allowed_operations) if allowed_operations is not None else None
         for form_id, ir in forms.items():
             if "irVersion" not in ir:
                 raise ValueError(f"FORM_IR_REQUIRED ({form_id}): register a compiled FormIR (vds-form compile --json), not a raw document.")
@@ -95,17 +108,18 @@ class TrustedSubmissionHandler:
     def supports_operation(self, operation_ref: str) -> bool:
         return self.operations.has(operation_ref)
 
-    def handle(self, request: Dict[str, Any]) -> Dict[str, Any]:
+    def handle(self, request: Dict[str, Any], auth: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Handle a submission. ``auth`` is the SERVER-DERIVED principal; it must
+        never be taken from the client request body."""
         started = time.time()
         ir = self.irs.get(request["formId"])
         if ir is None:
             return {"status": "config-error", "code": "SUBMISSION_OPERATION_UNRESOLVED",
                     "message": f"Form \"{request['formId']}\" is not registered on this server."}
         submission = ir.get("submission") or {}
-        operation_ref = request.get("operationRef") or submission.get("operationRef") or ""
         req_values = request.get("values", {})
 
-        def do_audit(result: Dict[str, Any], issue_codes: Optional[List[str]] = None) -> None:
+        def do_audit(result: Dict[str, Any], operation_ref: str, issue_codes: Optional[List[str]] = None) -> None:
             if not self.audit:
                 return
             self.audit({
@@ -113,22 +127,29 @@ class TrustedSubmissionHandler:
                 "formId": ir["formId"], "formVersion": ir["formVersion"],
                 "operationRef": operation_ref, "correlationId": request.get("correlationId", ""),
                 "idempotencyKey": request["idempotencyKey"],
-                "userId": (request.get("auth") or {}).get("userId"),
-                "tenantId": (request.get("auth") or {}).get("tenantId"),
+                "userId": (auth or {}).get("userId"),
+                "tenantId": (auth or {}).get("tenantId"),
                 "outcome": result["status"], "issueCodes": issue_codes or [],
                 "valuePaths": list(req_values.keys()),  # paths only, never values
             })
 
-        cache_key = f"{request['formId']}|{request['idempotencyKey']}"
-        cached = self.idempotency.get(cache_key)
-        if cached is not None:
-            do_audit(cached, ["IDEMPOTENT_REPLAY"])
-            return cached
+        # Operation binding: from the compiled FormIR, never from the client.
+        operation_ref = submission.get("operationRef") or ""
+        if request.get("operationRef") is not None and request["operationRef"] != operation_ref:
+            result = {"status": "permission-denied", "code": "OPERATION_OVERRIDE_FORBIDDEN",
+                      "message": "The requested operation does not match the operation configured for this form."}
+            do_audit(result, operation_ref, ["OPERATION_OVERRIDE_FORBIDDEN"])
+            return result
+        if self.allowed_operations is not None and operation_ref not in self.allowed_operations:
+            result = {"status": "permission-denied", "code": "OPERATION_NOT_ALLOWED",
+                      "message": f"Operation \"{operation_ref}\" is not in the server allowlist."}
+            do_audit(result, operation_ref, ["OPERATION_NOT_ALLOWED"])
+            return result
 
         if request.get("formVersion") and request["formVersion"] != ir["formVersion"]:
             result = {"status": "server-validation-failed",
                       "issues": [_server_issue("FORM_VERSION_MISMATCH", f"Client form version {request['formVersion']} != server {ir['formVersion']}.")]}
-            do_audit(result, ["FORM_VERSION_MISMATCH"])
+            do_audit(result, operation_ref, ["FORM_VERSION_MISMATCH"])
             return result
 
         # Reverse inputMapping to reconstruct field-keyed values.
@@ -146,7 +167,7 @@ class TrustedSubmissionHandler:
         if not validation["valid"]:
             issues = [{**i, "source": "server"} for i in validation["issues"]]
             result = {"status": "server-validation-failed", "issues": issues}
-            do_audit(result, [i["code"] for i in validation["issues"]])
+            do_audit(result, operation_ref, [i["code"] for i in validation["issues"]])
             return result
 
         security = ir.get("security", {})
@@ -156,14 +177,14 @@ class TrustedSubmissionHandler:
                 result = {"status": "permission-denied", "code": "RBAC_NOT_CONFIGURED",
                           "message": "Form declares submitPermissions but no RBAC evaluator is registered on the server.",
                           "requiredPermissions": required}
-                do_audit(result, ["RBAC_NOT_CONFIGURED"])
+                do_audit(result, operation_ref, ["RBAC_NOT_CONFIGURED"])
                 return result
-            decision = self.rbac.evaluate(request.get("auth"), required)
+            decision = self.rbac.evaluate(auth, required)
             if not decision["allowed"]:
                 result = {"status": "permission-denied", "code": "PERMISSION_DENIED",
                           "message": f"Missing permissions: {', '.join(decision['missing'])}",
                           "requiredPermissions": decision["missing"]}
-                do_audit(result, ["PERMISSION_DENIED"])
+                do_audit(result, operation_ref, ["PERMISSION_DENIED"])
                 return result
 
         for field_id, access in (security.get("fieldAccess") or {}).items():
@@ -176,24 +197,46 @@ class TrustedSubmissionHandler:
             provided = get_path(values, field["key"])
             if provided is None:
                 continue
-            decision = self.rbac.evaluate(request.get("auth"), write_perms) if self.rbac else {"allowed": False, "missing": write_perms}
+            decision = self.rbac.evaluate(auth, write_perms) if self.rbac else {"allowed": False, "missing": write_perms}
             if not decision["allowed"]:
                 result = {"status": "permission-denied", "code": "FIELD_WRITE_DENIED",
                           "message": f"Not permitted to write field \"{field['key']}\".",
                           "requiredPermissions": decision["missing"]}
-                do_audit(result, ["FIELD_WRITE_DENIED"])
+                do_audit(result, operation_ref, ["FIELD_WRITE_DENIED"])
                 return result
 
         handler = self.operations.resolve(operation_ref)
         if handler is None:
             result = {"status": "config-error", "code": "SUBMISSION_OPERATION_UNRESOLVED",
                       "message": f"Operation \"{operation_ref}\" is not registered on this server."}
-            do_audit(result, ["SUBMISSION_OPERATION_UNRESOLVED"])
+            do_audit(result, operation_ref, ["SUBMISSION_OPERATION_UNRESOLVED"])
+            return result
+
+        # Idempotency AFTER auth/authz/version. Scoped key + fingerprint + atomic claim.
+        scope_key = scoped_idempotency_key(
+            tenant_id=(auth or {}).get("tenantId"), user_id=(auth or {}).get("userId"),
+            form_id=ir["formId"], operation_ref=operation_ref,
+            idempotency_key=request["idempotencyKey"],
+        )
+        fingerprint = payload_fingerprint(req_values)
+        claim = self.idempotency.claim(scope_key, fingerprint)
+        if claim["kind"] == "replay":
+            do_audit(claim["result"], operation_ref, ["IDEMPOTENT_REPLAY"])
+            return claim["result"]
+        if claim["kind"] == "conflict":
+            result = {"status": "business-rejected", "code": "IDEMPOTENCY_KEY_CONFLICT",
+                      "message": "This idempotency key was already used with a different payload."}
+            do_audit(result, operation_ref, ["IDEMPOTENCY_KEY_CONFLICT"])
+            return result
+        if claim["kind"] == "in-progress":
+            result = {"status": "business-rejected", "code": "IDEMPOTENCY_IN_PROGRESS",
+                      "message": "A submission with this idempotency key is already in progress."}
+            do_audit(result, operation_ref, ["IDEMPOTENCY_IN_PROGRESS"])
             return result
 
         try:
             data = handler(req_values, {
-                "auth": request.get("auth"), "idempotencyKey": request["idempotencyKey"],
+                "auth": auth, "idempotencyKey": request["idempotencyKey"],
                 "correlationId": request.get("correlationId", ""), "formId": ir["formId"],
             })
             result = {"status": "succeeded", "operationRef": operation_ref, "data": data,
@@ -209,8 +252,10 @@ class TrustedSubmissionHandler:
                 result = {"status": "business-rejected", "code": code or "OPERATION_FAILED", "message": str(e) or "Operation failed."}
 
         if result["status"] == "succeeded":
-            self.idempotency[cache_key] = result
-        do_audit(result, [i["code"] for i in result.get("issues", [])])
+            self.idempotency.complete(scope_key, result)
+        else:
+            self.idempotency.release(scope_key)
+        do_audit(result, operation_ref, [i["code"] for i in result.get("issues", [])])
         return result
 
 

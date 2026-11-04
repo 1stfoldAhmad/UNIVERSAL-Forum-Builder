@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vds-form-django"
-version = "1.0.0"
+version = "1.1.0"
 description = "VDS Universal Form Builder — Django/Python trusted execution adapter (vds.expr/1 engine, server re-validation, RBAC, idempotency, redacted audit)."
 readme = "README.md"
 requires-python = ">=3.10"
