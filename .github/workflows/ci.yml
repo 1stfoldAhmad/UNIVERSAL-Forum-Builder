@@ -94,7 +94,13 @@ jobs:
       - name: Install Laravel 13 + path-linked execution adapter
         run: cd adapters/laravel && composer update --no-interaction --prefer-dist --no-progress
       - name: Run real Laravel 13 integration check
-        run: cd adapters/laravel && php tests/run-laravel13.php
+        run: |
+          cd adapters/laravel
+          php tests/run-laravel13.php > /tmp/l13.log 2>&1
+          code=$?
+          cat /tmp/l13.log
+          if [ $code -ne 0 ]; then grep -E 'Fatal|Error|FAIL|Uncaught' /tmp/l13.log | head -30 | sed 's/^/::error::/'; fi
+          exit $code
 
   flutter:
     name: Flutter renderer (Dart conformance + controller + widgets)
@@ -125,9 +131,21 @@ jobs:
         with:
           gradle-version: '8.11.1'
       - name: Core tests (62-case expression conformance + controller)
-        run: cd adapters/compose && gradle :core:test --no-daemon
+        run: |
+          cd adapters/compose
+          gradle :core:test --no-daemon --console=plain > /tmp/core.log 2>&1
+          code=$?
+          tail -80 /tmp/core.log
+          if [ $code -ne 0 ]; then grep -E '^e: |error:|FAILED|Caused by|> Task' /tmp/core.log | head -50 | sed 's/^/::error::/'; fi
+          exit $code
       - name: Compose UI compile evidence
-        run: cd adapters/compose && gradle :ui:compileDebugKotlin --no-daemon
+        run: |
+          cd adapters/compose
+          gradle :ui:compileDebugKotlin --no-daemon --console=plain > /tmp/ui.log 2>&1
+          code=$?
+          tail -80 /tmp/ui.log
+          if [ $code -ne 0 ]; then grep -E '^e: |error:|FAILED|Caused by|> Task' /tmp/ui.log | head -50 | sed 's/^/::error::/'; fi
+          exit $code
 
   swiftui:
     name: SwiftUI renderer (Swift conformance + controller + UI build)
@@ -137,4 +155,10 @@ jobs:
       - name: Swift version
         run: swift --version
       - name: Swift test (62-case expression conformance + controller; builds VdsFormUI)
-        run: cd adapters/swiftui && swift test
+        run: |
+          cd adapters/swiftui
+          swift test > /tmp/swift.log 2>&1
+          code=$?
+          tail -80 /tmp/swift.log
+          if [ $code -ne 0 ]; then grep -E 'error:|failed|XCTAssert' /tmp/swift.log | head -50 | sed 's/^/::error::/'; fi
+          exit $code

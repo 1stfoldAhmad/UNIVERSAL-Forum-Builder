@@ -11,6 +11,16 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+// The execution adapter declares several classes per file (PSR-4 cannot autoload
+// them by name), so load them explicitly — exactly as the framework-free suites do.
+$exec = __DIR__ . '/../../../execution-adapters/laravel/src';
+require_once $exec . '/Expressions.php';
+require_once $exec . '/Validation.php';
+require_once $exec . '/Policy.php';
+require_once $exec . '/Payload.php';
+require_once $exec . '/Idempotency.php';
+require_once $exec . '/Submission.php';
+
 use Illuminate\Container\Container;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Facade;
