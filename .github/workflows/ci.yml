@@ -138,7 +138,7 @@ jobs:
           gradle :core:test --no-daemon --console=plain > /tmp/core.log 2>&1
           code=$?
           tail -80 /tmp/core.log
-          if [ $code -ne 0 ]; then { head -70 /tmp/core.log; echo '---TAIL---'; tail -25 /tmp/core.log; } | sed 's/^/::error::/'; fi
+          if [ $code -ne 0 ]; then grep -E 'e: |FAILURE|What went wrong|Execution failed|Caused by|Could not|error:|FAILED|Unresolved|not found|Exception|>' /tmp/core.log | head -45 | sed 's/^/::error::/'; fi
           exit $code
       - name: Compose UI compile evidence
         run: |
@@ -147,7 +147,7 @@ jobs:
           gradle :ui:compileDebugKotlin --no-daemon --console=plain > /tmp/ui.log 2>&1
           code=$?
           tail -80 /tmp/ui.log
-          if [ $code -ne 0 ]; then { head -70 /tmp/ui.log; echo '---TAIL---'; tail -25 /tmp/ui.log; } | sed 's/^/::error::/'; fi
+          if [ $code -ne 0 ]; then grep -E 'e: |FAILURE|What went wrong|Execution failed|Caused by|Could not|error:|FAILED|Unresolved|not found|Exception|>' /tmp/ui.log | head -45 | sed 's/^/::error::/'; fi
           exit $code
 
   swiftui:
@@ -164,5 +164,5 @@ jobs:
           swift test > /tmp/swift.log 2>&1
           code=$?
           tail -80 /tmp/swift.log
-          if [ $code -ne 0 ]; then tail -50 /tmp/swift.log | sed 's/^/::error::/'; fi
+          if [ $code -ne 0 ]; then grep -E 'error:|failed|XCTAssert|Fatal' /tmp/swift.log | head -45 | sed 's/^/::error::/'; fi
           exit $code
