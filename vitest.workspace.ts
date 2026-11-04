@@ -21,6 +21,7 @@ export default defineWorkspace([
     test: {
       name: 'web',
       environment: 'jsdom',
+      globals: true,
       include: [
         'adapters/react/tests/**/*.test.tsx',
         'adapters/vue/tests/**/*.test.ts',
@@ -40,6 +41,7 @@ export default defineWorkspace([
     test: {
       name: 'native',
       environment: 'jsdom',
+      globals: true,
       include: [
         'adapters/expo/tests/**/*.test.tsx',
         'examples/expo-app/tests/**/*.test.tsx',
@@ -52,6 +54,7 @@ export default defineWorkspace([
     test: {
       name: 'angular',
       environment: 'jsdom',
+      globals: true,
       include: ['adapters/angular/tests/**/*.test.ts'],
       exclude: ['**/node_modules/**'],
       setupFiles: ['./tests/setup-angular.ts'],

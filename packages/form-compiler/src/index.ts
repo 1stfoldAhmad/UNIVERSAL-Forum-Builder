@@ -408,12 +408,13 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
   let layout: LayoutNode;
   if (doc.layout) {
     validateLayout(doc.layout, '/layout', false);
-    const missing = topLevel.filter((f) => !placed.has(f.def.id) && !f.def.hidden);
+    // Include hidden fields too — conditions may reveal them at runtime.
+    const missing = topLevel.filter((f) => !placed.has(f.def.id));
     layout = missing.length
       ? { type: 'section', id: 'root', children: [doc.layout, { type: 'group', id: '__auto__', fieldRefs: missing.map((f) => f.def.id) }] }
       : doc.layout;
   } else {
-    layout = { type: 'section', id: 'root', fieldRefs: topLevel.filter((f) => !f.def.hidden).map((f) => f.def.id) };
+    layout = { type: 'section', id: 'root', fieldRefs: topLevel.map((f) => f.def.id) };
   }
 
   /* capability analysis */
