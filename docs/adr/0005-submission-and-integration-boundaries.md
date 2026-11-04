@@ -20,3 +20,11 @@ Status: accepted · 2026-11-04
   client-side hiding is never authorization. Idempotency keys + single-flight locks prevent
   duplicates; offline queueing only when the operation contract allows it, and a queued
   submission is never reported as server success.
+
+
+## Addendum — independent-audit remediation (2026-11-04)
+
+- Sensitive registry fields are stripped from drafts/offline queues by default; explicit `includeSensitive` opt-in only.
+- Operation inputs enforce recursive depth/node/string/array/object limits and forbidden names at every depth (TS/Python/PHP parity fixture).
+- Idempotency claims carry leases. Expired claims return `IDEMPOTENCY_RECOVERY_REQUIRED`; hosts must reconcile via transaction/outbox (`complete` if committed, `release` only if provably not committed). No unsafe automatic re-execution.
+- Durable persistence references: Node SQLite draft/queue/idempotency; browser/Expo KeyValue adapters. Memory adapters are explicitly non-durable.
