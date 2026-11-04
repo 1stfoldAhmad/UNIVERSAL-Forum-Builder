@@ -1,0 +1,494 @@
+{
+  "irVersion": "1.0.0",
+  "specVersion": "1.0.0",
+  "compilerVersion": "1.0.0",
+  "formId": "invoice",
+  "formVersion": "1.0.0",
+  "fields": [
+    {
+      "id": "customerName",
+      "type": "text",
+      "key": "customerName",
+      "valueType": "string",
+      "label": "Customer",
+      "required": true,
+      "disabled": false,
+      "readonly": false,
+      "hidden": false,
+      "computed": false,
+      "validation": {},
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "children": [],
+      "sourcePointer": "/fields/0"
+    },
+    {
+      "id": "taxRate",
+      "type": "percentage",
+      "key": "taxRate",
+      "valueType": "number",
+      "label": "Tax rate (%)",
+      "defaultValue": 15,
+      "required": false,
+      "disabled": false,
+      "readonly": false,
+      "hidden": false,
+      "computed": false,
+      "validation": {
+        "min": 0,
+        "max": 100
+      },
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "children": [],
+      "sourcePointer": "/fields/1"
+    },
+    {
+      "id": "items",
+      "type": "repeater",
+      "key": "items",
+      "valueType": "object[]",
+      "label": "Line items",
+      "required": false,
+      "disabled": false,
+      "readonly": false,
+      "hidden": false,
+      "computed": false,
+      "validation": {
+        "minItems": 1,
+        "maxItems": 50
+      },
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "children": [
+        "description",
+        "qty",
+        "price",
+        "lineTotal"
+      ],
+      "sourcePointer": "/fields/2"
+    },
+    {
+      "id": "description",
+      "type": "text",
+      "key": "items[].description",
+      "valueType": "string",
+      "label": "Description",
+      "required": true,
+      "disabled": false,
+      "readonly": false,
+      "hidden": false,
+      "computed": false,
+      "validation": {},
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "parentId": "items",
+      "repeaterId": "items",
+      "children": [],
+      "sourcePointer": "/fields/2/children/0"
+    },
+    {
+      "id": "qty",
+      "type": "integer",
+      "key": "items[].qty",
+      "valueType": "integer",
+      "label": "Qty",
+      "defaultValue": 1,
+      "required": false,
+      "disabled": false,
+      "readonly": false,
+      "hidden": false,
+      "computed": false,
+      "validation": {
+        "min": 1,
+        "max": 10000
+      },
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "parentId": "items",
+      "repeaterId": "items",
+      "children": [],
+      "sourcePointer": "/fields/2/children/1"
+    },
+    {
+      "id": "price",
+      "type": "currency",
+      "key": "items[].price",
+      "valueType": "number",
+      "label": "Unit price",
+      "defaultValue": 0,
+      "required": false,
+      "disabled": false,
+      "readonly": false,
+      "hidden": false,
+      "computed": false,
+      "validation": {
+        "precision": 2,
+        "min": 0
+      },
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "parentId": "items",
+      "repeaterId": "items",
+      "children": [],
+      "sourcePointer": "/fields/2/children/2"
+    },
+    {
+      "id": "lineTotal",
+      "type": "computed",
+      "key": "items[].lineTotal",
+      "valueType": "number",
+      "label": "Line total",
+      "required": false,
+      "disabled": false,
+      "readonly": true,
+      "hidden": false,
+      "computed": true,
+      "validation": {},
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "parentId": "items",
+      "repeaterId": "items",
+      "children": [],
+      "sourcePointer": "/fields/2/children/3"
+    },
+    {
+      "id": "subtotal",
+      "type": "computed",
+      "key": "subtotal",
+      "valueType": "number",
+      "label": "Subtotal",
+      "required": false,
+      "disabled": false,
+      "readonly": true,
+      "hidden": false,
+      "computed": true,
+      "validation": {},
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "children": [],
+      "sourcePointer": "/fields/3"
+    },
+    {
+      "id": "taxAmount",
+      "type": "computed",
+      "key": "taxAmount",
+      "valueType": "number",
+      "label": "Tax",
+      "required": false,
+      "disabled": false,
+      "readonly": true,
+      "hidden": false,
+      "computed": true,
+      "validation": {},
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "children": [],
+      "sourcePointer": "/fields/4"
+    },
+    {
+      "id": "total",
+      "type": "computed",
+      "key": "total",
+      "valueType": "number",
+      "label": "Total",
+      "required": false,
+      "disabled": false,
+      "readonly": true,
+      "hidden": false,
+      "computed": true,
+      "validation": {},
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "children": [],
+      "sourcePointer": "/fields/5"
+    }
+  ],
+  "layout": {
+    "type": "section",
+    "id": "root",
+    "fieldRefs": [
+      "customerName",
+      "taxRate",
+      "items",
+      "subtotal",
+      "taxAmount",
+      "total"
+    ]
+  },
+  "conditions": [],
+  "formulas": [
+    {
+      "id": "lineTotal",
+      "target": "items[].lineTotal",
+      "expr": {
+        "op": "mul",
+        "args": [
+          {
+            "ref": "item:qty"
+          },
+          {
+            "ref": "item:price"
+          }
+        ]
+      },
+      "reads": [
+        {
+          "kind": "item",
+          "path": "qty"
+        },
+        {
+          "kind": "item",
+          "path": "price"
+        }
+      ],
+      "rowScoped": true
+    },
+    {
+      "id": "subtotal",
+      "target": "subtotal",
+      "expr": {
+        "op": "sum",
+        "args": [
+          {
+            "ref": "field:items.*.lineTotal"
+          }
+        ]
+      },
+      "reads": [
+        {
+          "kind": "field",
+          "path": "items.*.lineTotal"
+        }
+      ],
+      "rowScoped": false
+    },
+    {
+      "id": "taxAmount",
+      "target": "taxAmount",
+      "expr": {
+        "op": "round",
+        "args": [
+          {
+            "op": "mul",
+            "args": [
+              {
+                "ref": "field:subtotal"
+              },
+              {
+                "op": "div",
+                "args": [
+                  {
+                    "ref": "field:taxRate"
+                  },
+                  {
+                    "const": 100
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "const": 2
+          }
+        ]
+      },
+      "reads": [
+        {
+          "kind": "field",
+          "path": "subtotal"
+        },
+        {
+          "kind": "field",
+          "path": "taxRate"
+        }
+      ],
+      "rowScoped": false
+    },
+    {
+      "id": "total",
+      "target": "total",
+      "expr": {
+        "op": "add",
+        "args": [
+          {
+            "ref": "field:subtotal"
+          },
+          {
+            "ref": "field:taxAmount"
+          }
+        ]
+      },
+      "reads": [
+        {
+          "kind": "field",
+          "path": "subtotal"
+        },
+        {
+          "kind": "field",
+          "path": "taxAmount"
+        }
+      ],
+      "rowScoped": false
+    }
+  ],
+  "crossFieldRules": [
+    {
+      "id": "positiveTotal",
+      "expr": {
+        "op": "gt",
+        "args": [
+          {
+            "ref": "field:total"
+          },
+          {
+            "const": 0
+          }
+        ]
+      },
+      "message": "Invoice total must be greater than zero.",
+      "path": "total",
+      "severity": "error",
+      "reads": [
+        {
+          "kind": "field",
+          "path": "total"
+        }
+      ]
+    }
+  ],
+  "asyncRules": [],
+  "dataSources": [],
+  "submission": {
+    "operationRef": "test:invoice.create"
+  },
+  "persistence": {},
+  "security": {},
+  "localization": {
+    "defaultLocale": "en",
+    "locales": [
+      "en"
+    ]
+  },
+  "requiredCapabilities": [
+    "repeaters"
+  ],
+  "dependencies": {
+    "edges": [
+      {
+        "from": "f:items[].qty",
+        "to": "F:lineTotal",
+        "kind": "formula"
+      },
+      {
+        "from": "f:items[].price",
+        "to": "F:lineTotal",
+        "kind": "formula"
+      },
+      {
+        "from": "F:lineTotal",
+        "to": "f:items[].lineTotal",
+        "kind": "formula"
+      },
+      {
+        "from": "f:items[].lineTotal",
+        "to": "F:subtotal",
+        "kind": "formula"
+      },
+      {
+        "from": "F:subtotal",
+        "to": "f:subtotal",
+        "kind": "formula"
+      },
+      {
+        "from": "f:subtotal",
+        "to": "F:taxAmount",
+        "kind": "formula"
+      },
+      {
+        "from": "f:taxRate",
+        "to": "F:taxAmount",
+        "kind": "formula"
+      },
+      {
+        "from": "F:taxAmount",
+        "to": "f:taxAmount",
+        "kind": "formula"
+      },
+      {
+        "from": "f:subtotal",
+        "to": "F:total",
+        "kind": "formula"
+      },
+      {
+        "from": "f:taxAmount",
+        "to": "F:total",
+        "kind": "formula"
+      },
+      {
+        "from": "F:total",
+        "to": "f:total",
+        "kind": "formula"
+      },
+      {
+        "from": "f:total",
+        "to": "v:positiveTotal",
+        "kind": "validation"
+      }
+    ],
+    "order": [
+      "f:customerName",
+      "f:items",
+      "f:items[].description",
+      "f:items[].price",
+      "f:items[].qty",
+      "F:lineTotal",
+      "f:items[].lineTotal",
+      "F:subtotal",
+      "f:subtotal",
+      "f:taxRate",
+      "F:taxAmount",
+      "f:taxAmount",
+      "F:total",
+      "f:total",
+      "v:positiveTotal"
+    ]
+  },
+  "sourceMap": {
+    "f:customerName": "/fields/0",
+    "f:taxRate": "/fields/1",
+    "f:items": "/fields/2",
+    "f:items[].description": "/fields/2/children/0",
+    "f:items[].qty": "/fields/2/children/1",
+    "f:items[].price": "/fields/2/children/2",
+    "f:items[].lineTotal": "/fields/2/children/3",
+    "f:subtotal": "/fields/3",
+    "f:taxAmount": "/fields/4",
+    "f:total": "/fields/5",
+    "F:lineTotal": "/logic/formulas/0",
+    "F:subtotal": "/logic/formulas/1",
+    "F:taxAmount": "/logic/formulas/2",
+    "F:total": "/logic/formulas/3"
+  },
+  "fingerprint": "a31365fd"
+}

@@ -1,0 +1,126 @@
+{
+  "irVersion": "1.0.0",
+  "specVersion": "1.0.0",
+  "compilerVersion": "1.0.0",
+  "formId": "hid2",
+  "formVersion": "1.0.0",
+  "fields": [
+    {
+      "id": "type",
+      "type": "text",
+      "key": "type",
+      "valueType": "string",
+      "label": "Type",
+      "required": false,
+      "disabled": false,
+      "readonly": false,
+      "hidden": false,
+      "computed": false,
+      "validation": {},
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "children": [],
+      "sourcePointer": "/fields/0"
+    },
+    {
+      "id": "company",
+      "type": "text",
+      "key": "company",
+      "valueType": "string",
+      "label": "Company",
+      "required": false,
+      "disabled": false,
+      "readonly": false,
+      "hidden": true,
+      "computed": false,
+      "validation": {},
+      "optionValueKey": "value",
+      "optionLabelKey": "label",
+      "ui": {},
+      "accessibility": {},
+      "children": [],
+      "sourcePointer": "/fields/1"
+    }
+  ],
+  "layout": {
+    "type": "section",
+    "id": "root",
+    "fieldRefs": [
+      "type",
+      "company"
+    ]
+  },
+  "conditions": [
+    {
+      "id": "showCompany",
+      "when": {
+        "op": "eq",
+        "args": [
+          {
+            "ref": "field:type"
+          },
+          {
+            "const": "business"
+          }
+        ]
+      },
+      "effects": [
+        {
+          "fieldId": "company",
+          "set": {
+            "visible": true
+          }
+        }
+      ],
+      "reads": [
+        {
+          "kind": "field",
+          "path": "type"
+        }
+      ]
+    }
+  ],
+  "formulas": [],
+  "crossFieldRules": [],
+  "asyncRules": [],
+  "dataSources": [],
+  "submission": {
+    "operationRef": "test:save"
+  },
+  "persistence": {},
+  "security": {},
+  "localization": {
+    "defaultLocale": "en",
+    "locales": [
+      "en"
+    ]
+  },
+  "requiredCapabilities": [],
+  "dependencies": {
+    "edges": [
+      {
+        "from": "f:type",
+        "to": "c:showCompany",
+        "kind": "condition"
+      },
+      {
+        "from": "c:showCompany",
+        "to": "f:company",
+        "kind": "condition"
+      }
+    ],
+    "order": [
+      "f:type",
+      "c:showCompany",
+      "f:company"
+    ]
+  },
+  "sourceMap": {
+    "f:type": "/fields/0",
+    "f:company": "/fields/1",
+    "c:showCompany": "/logic/conditions/0"
+  },
+  "fingerprint": "3b693ed2"
+}
