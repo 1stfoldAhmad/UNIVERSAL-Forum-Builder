@@ -33,5 +33,6 @@
             "php tests/run-operation-limits.php",
             "php tests/run-idempotency-recovery.php"
         ]
-    }
+    },
+    "version": "1.1.0"
 }

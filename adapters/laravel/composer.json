@@ -16,15 +16,13 @@
     ],
     "require": {
         "php": "^8.3",
-        "vds/form-laravel": "*",
+        "vds/form-laravel": "^1.1",
         "laravel/framework": "^13.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^11.0"
     },
-    "suggest": {
-        "laravel/framework": "Already required: the ServiceProvider/Blade/controller integration needs Laravel 13 (PHP ^8.3)."
-    },
+    "suggest": {},
     "autoload": {
         "psr-4": {
             "VdsForm\\Renderer\\": "src/"

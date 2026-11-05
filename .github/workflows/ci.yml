@@ -224,11 +224,22 @@ jobs:
           code=$?
           cat /tmp/fmt.log
           if [ $code -ne 0 ]; then
-            # Surface the exact diff as annotations so the failure is actionable.
-            dart format --output=show . > /tmp/fmt-show.log 2>&1
             grep -E '^Changed|^Formatted' /tmp/fmt.log | head -30 | sed 's/^/::error::/'
+            # Produce the canonical formatting so it can be applied verbatim.
+            cp -r lib /tmp/fmt-lib && cp -r test /tmp/fmt-test
+            dart format . > /dev/null 2>&1
+            mkdir -p /tmp/formatted/lib /tmp/formatted/test
+            cp -r lib/. /tmp/formatted/lib/ && cp -r test/. /tmp/formatted/test/
           fi
           exit $code
+      - name: Upload canonical formatting (only when the check failed)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-formatted
+          path: /tmp/formatted
+          if-no-files-found: ignore
+          retention-days: 3
       - name: Flutter tests (shared conformance + controller + uploads + widgets)
         run: |
           cd adapters/flutter

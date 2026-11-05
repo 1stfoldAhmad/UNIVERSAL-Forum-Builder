@@ -7,7 +7,6 @@ library;
 import 'package:flutter/material.dart';
 
 import 'controller.dart';
-import 'expr.dart';
 import 'validation.dart';
 
 class VdsForm extends StatefulWidget {
@@ -272,7 +271,7 @@ class _VdsFormState extends State<VdsForm> {
       case 'textarea':
         return TextField(key: Key('vds-input-$path'), controller: _textFor(path, value?.toString() ?? ''), enabled: enabled, maxLines: 4, onChanged: (v) => c.setFieldValue(path, v));
       case 'select':
-        return DropdownButtonFormField<String>(key: Key('vds-input-$path'), value: (value?.toString().isNotEmpty ?? false) ? value.toString() : null,
+        return DropdownButtonFormField<String>(key: Key('vds-input-$path'), initialValue: (value?.toString().isNotEmpty ?? false) ? value.toString() : null,
           items: opts.map((o) => DropdownMenuItem(value: o['value'].toString(), child: Text(localize(o['label'], c.locale)))).toList(),
           onChanged: enabled ? (v) => c.setFieldValue(path, v) : null);
       case 'multiselect':
@@ -280,8 +279,13 @@ class _VdsFormState extends State<VdsForm> {
         return Column(children: opts.map((o) => CheckboxListTile(value: sel.contains(o['value'].toString()), title: Text(localize(o['label'], c.locale)),
           onChanged: enabled ? (v) { final s = {...sel}; if (v == true) { s.add(o['value'].toString()); } else { s.remove(o['value'].toString()); } c.setFieldValue(path, s.toList()); } : null)).toList());
       case 'radio':
-        return Column(children: opts.map((o) => RadioListTile<String>(value: o['value'].toString(), groupValue: value?.toString(), title: Text(localize(o['label'], c.locale)),
-          onChanged: enabled ? (v) => c.setFieldValue(path, v) : null)).toList());
+        // Flutter >=3.32 manages radio group state with a RadioGroup ancestor;
+        // per-tile groupValue/onChanged are deprecated.
+        return RadioGroup<String>(
+          groupValue: value?.toString(),
+          onChanged: enabled ? (v) => c.setFieldValue(path, v) : null,
+          child: Column(children: opts.map((o) => RadioListTile<String>(value: o['value'].toString(), title: Text(localize(o['label'], c.locale)))).toList()),
+        );
       case 'checkbox': case 'switch': case 'consent':
         return SwitchListTile(key: Key('vds-input-$path'), value: value == true, title: Text(localize(f['label'], c.locale)), onChanged: enabled ? (v) => c.setFieldValue(path, v) : null);
       case 'rating':
