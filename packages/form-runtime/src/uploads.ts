@@ -13,8 +13,8 @@
  *  4. MIME/size constraints are enforced BEFORE calling the provider, using the
  *     same issue codes as server-side validation (ASSET_TYPE_REJECTED /
  *     ASSET_TOO_LARGE / MULTIPLE_NOT_ALLOWED) so client and server agree.
- *  5. Re-picking an identical asset (same name + size) is de-duplicated instead of
- *     uploaded twice.
+ *  5. Re-picking is de-duplicated only when a stable identity is available
+ *     (provider/native reference, local URI, or the same browser object).
  *  6. Cancellation is cooperative: an aborted signal stops the batch, keeps what
  *     was already committed, and never commits the in-flight result.
  *  7. The asset `source` reflects the real interaction (picker vs drag-drop).
@@ -33,6 +33,10 @@ export interface UploadCandidate {
   type?: string;
   /** Native pickers already mint an id / local handle / source; preserve them. */
   id?: string;
+  /** Optional stable provider identity (e.g. cloud asset id). */
+  assetRef?: string;
+  /** Original browser File (or provider object) identity when available. */
+  identity?: object;
   localUri?: string;
   source?: UploadSource;
 }
@@ -63,6 +67,8 @@ export interface UploadBatchOptions {
   source: UploadSource;
   /** Current field value, used to append and to de-duplicate. */
   currentValue?: unknown;
+  /** Read the live field value at commit time to preserve concurrent edits. */
+  getCurrentValue?: () => unknown;
   auth?: AuthContext;
   signal?: AbortSignal;
   /** Called after EVERY successful upload (and never for a cancelled batch). */
@@ -77,12 +83,16 @@ export interface UploadBatchResult {
 }
 
 /** Mirrors the accept-matching rules used by @vds-form/validation. */
-export function mimeAllowed(mimeType: string, accept?: string[]): boolean {
+export function mimeAllowed(mimeType: string, accept?: string[], fileName?: string): boolean {
   if (!accept || accept.length === 0) return true;
-  return accept.some((acc) =>
-    acc === mimeType
-    || (acc.endsWith('/*') && mimeType.startsWith(acc.slice(0, -1)))
-    || (acc.startsWith('.') && mimeType.includes(acc.slice(1))));
+  const rawMime = mimeType.trim().toLowerCase().split(';', 1)[0];
+  const mime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
+  const extension = fileName?.match(/\.[^./]+$/)?.[0]?.toLowerCase();
+  return accept.some((raw) => {
+    const acc = raw.trim().toLowerCase();
+    if (acc.startsWith('.')) return !!extension && extension === acc;
+    return acc === mime || (acc.endsWith('/*') && mime.startsWith(acc.slice(0, -1)));
+  });
 }
 
 function asRefArray(value: unknown): UploadedAssetRef[] {
@@ -91,7 +101,24 @@ function asRefArray(value: unknown): UploadedAssetRef[] {
   return [];
 }
 
-const assetKey = (name: string, size: number): string => `${name}:${size}`;
+const objectIds = new WeakMap<object, number>();
+const uploadedObjects = new WeakMap<object, string>();
+let nextObjectId = 1;
+function assetKey(asset: { id?: string; assetRef?: string; localUri?: string; identity?: object }): string | undefined {
+  // Names and sizes are descriptive metadata, not identity. If no stable handle is
+  // supplied, preserve the candidate rather than risk dropping a distinct file.
+  if (asset.assetRef) return `ref:${asset.assetRef}`;
+  if (asset.identity) {
+    const uploadedRef = uploadedObjects.get(asset.identity);
+    if (uploadedRef) return `ref:${uploadedRef}`;
+    let id = objectIds.get(asset.identity);
+    if (id === undefined) { id = nextObjectId++; objectIds.set(asset.identity, id); }
+    return `object:${id}`;
+  }
+  if (asset.localUri) return `uri:${asset.localUri}`;
+  if (asset.id) return `id:${asset.id}`;
+  return undefined;
+}
 
 function isAbortError(e: unknown): boolean {
   const err = e as { name?: string; code?: string };
@@ -125,7 +152,7 @@ export async function uploadAssetBatch(opts: UploadBatchOptions): Promise<Upload
   }
 
   const existing = multiple ? asRefArray(opts.currentValue) : [];
-  const seen = new Set(existing.map((r) => assetKey(r.name, r.sizeBytes)));
+  const seen = new Set(existing.map((r) => assetKey(r)).filter((key): key is string => !!key));
   let accumulated: UploadedAssetRef[] = [...existing];
   let completed = 0;
 
@@ -137,7 +164,8 @@ export async function uploadAssetBatch(opts: UploadBatchOptions): Promise<Upload
     const file = files[i];
     if (opts.signal?.aborted) return { uploaded, failures, cancelled: true };
 
-    const mimeType = file.type || 'application/octet-stream';
+    const rawMime = file.type?.trim().toLowerCase().split(';', 1)[0];
+    const mimeType = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime || 'application/octet-stream';
     emit(i, file.name, 0);
 
     if (opts.constraints?.maxSizeBytes !== undefined && file.size > opts.constraints.maxSizeBytes) {
@@ -145,13 +173,13 @@ export async function uploadAssetBatch(opts: UploadBatchOptions): Promise<Upload
       completed++; emit(i, file.name, 0);
       continue;
     }
-    if (!mimeAllowed(mimeType, opts.constraints?.accept)) {
+    if (!mimeAllowed(mimeType, opts.constraints?.accept, file.name)) {
       failures.push({ name: file.name, code: 'ASSET_TYPE_REJECTED', message: `File type ${mimeType} is not allowed.` });
       completed++; emit(i, file.name, 0);
       continue;
     }
-    const key = assetKey(file.name, file.size);
-    if (seen.has(key)) {
+    const key = assetKey(file);
+    if (key && seen.has(key)) {
       // Already uploaded in this field: do not repeat the upload operation.
       completed++; emit(i, file.name, 1);
       continue;
@@ -160,7 +188,7 @@ export async function uploadAssetBatch(opts: UploadBatchOptions): Promise<Upload
     try {
       const ref = await opts.provider.upload({
         asset: {
-          id: file.id ?? `${file.name}-${file.size}`,
+          id: file.id ?? file.assetRef ?? file.localUri ?? `upload-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`,
           name: file.name,
           mimeType,
           sizeBytes: file.size,
@@ -175,10 +203,19 @@ export async function uploadAssetBatch(opts: UploadBatchOptions): Promise<Upload
       // An obsolete/cancelled batch must not write its result into the form.
       if (opts.signal?.aborted) return { uploaded, failures, cancelled: true };
 
-      seen.add(key);
+      if (key) seen.add(key);
+      if (file.identity && ref.assetRef) uploadedObjects.set(file.identity, ref.assetRef);
       uploaded.push(ref);
       if (multiple) {
-        accumulated = [...accumulated, ref];
+        // Read current state at commit time; another valid update may have landed
+        // while the provider was transferring this candidate.
+        const live = opts.getCurrentValue ? asRefArray(opts.getCurrentValue()) : accumulated;
+        const currentKeys = new Set(live.map((item) => assetKey(item)).filter((item): item is string => !!item));
+        if (key && currentKeys.has(key)) {
+          completed++; emit(i, file.name, 1);
+          continue;
+        }
+        accumulated = [...live, ref];
         opts.commit(accumulated);
       } else {
         opts.commit(ref);

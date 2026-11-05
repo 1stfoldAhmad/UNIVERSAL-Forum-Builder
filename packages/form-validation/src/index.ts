@@ -48,6 +48,20 @@ const FORMAT_PATTERNS: Record<string, RegExp> = {
   barcode: /^[A-Za-z0-9-]{4,64}$/,
 };
 
+/** MIME accept matching shared by runtime/server validation. */
+export function assetTypeAllowed(acceptList: string[] | undefined, fileName: string | undefined, mimeType: string | undefined): boolean {
+  if (!acceptList?.length) return true;
+  const rawMime = (mimeType ?? '').trim().toLowerCase().split(';', 1)[0];
+  const mime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
+  const extension = fileName?.match(/\.[^./]+$/)?.[0]?.toLowerCase();
+  return acceptList.some((raw) => {
+    const accept = raw.trim().toLowerCase();
+    if (accept.startsWith('.')) return !!extension && extension === accept;
+    const normalizedAccept = accept === 'image/jpg' ? 'image/jpeg' : accept;
+    return normalizedAccept === mime || (normalizedAccept.endsWith('/*') && mime.startsWith(normalizedAccept.slice(0, -1)));
+  });
+}
+
 /** Heuristic ReDoS guard: reject nested quantifiers and oversized patterns. */
 export function isSafePattern(pattern: string): boolean {
   if (pattern.length > 1000) return false;
@@ -188,9 +202,9 @@ function validateOne(
     const assets = Array.isArray(value) ? value : [value];
     if (!v.multiple && Array.isArray(value) && value.length > 1) issues.push(issue('MULTIPLE_NOT_ALLOWED', 'Only one file is allowed.', concreteKey, field.id));
     for (const a of assets) {
-      const asset = a as { mimeType?: string; sizeBytes?: number; assetRef?: string; localUri?: string };
-      if (v.accept?.length && asset.mimeType && !v.accept.some((acc) => acc === asset.mimeType || (acc.endsWith('/*') && asset.mimeType!.startsWith(acc.slice(0, -1))) || acc.startsWith('.') && asset.mimeType!.includes(acc.slice(1)))) {
-        issues.push(issue('ASSET_TYPE_REJECTED', `File type ${asset.mimeType} is not allowed.`, concreteKey, field.id));
+      const asset = a as { name?: string; mimeType?: string; sizeBytes?: number; assetRef?: string; localUri?: string };
+      if (!assetTypeAllowed(v.accept, asset.name, asset.mimeType)) {
+        issues.push(issue('ASSET_TYPE_REJECTED', `File type ${asset.mimeType ?? 'unknown'} is not allowed.`, concreteKey, field.id));
       }
       if (v.maxSizeBytes !== undefined && typeof asset.sizeBytes === 'number' && asset.sizeBytes > v.maxSizeBytes) {
         issues.push(issue('ASSET_TOO_LARGE', `File exceeds ${v.maxSizeBytes} bytes.`, concreteKey, field.id));

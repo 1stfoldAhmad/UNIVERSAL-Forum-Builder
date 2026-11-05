@@ -23,6 +23,7 @@
         "test": [
             "php tests/run-conformance.php",
             "php tests/run-form-conformance.php",
+            "php tests/run-upload-conformance.php",
             "php tests/run-idempotency-parity.php",
             "php tests/run-submission.php",
             "php tests/run-controller.php",

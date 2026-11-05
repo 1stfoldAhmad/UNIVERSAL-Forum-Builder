@@ -12,7 +12,8 @@ license = { text = "Apache-2.0" }
 dependencies = []
 
 [project.optional-dependencies]
-django = ["django>=4.2"]
+django52 = ["Django>=5.2,<5.3"]
+django61 = ["Django>=6.1,<6.2"]
 test = ["pytest>=7"]
 
 [tool.setuptools.packages.find]

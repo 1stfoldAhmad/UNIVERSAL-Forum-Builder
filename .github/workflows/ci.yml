@@ -7,13 +7,17 @@ on:
 
 jobs:
   typescript:
-    name: TypeScript core + renderers + tools
+    name: TypeScript core + renderers + tools (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24, 26]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
           cache: npm
       - name: Fetch + build vendored VDS logic engine
         run: npm run setup:vds
@@ -36,9 +40,42 @@ jobs:
       - name: Fresh external-project package smoke test
         run: npm run test:packages
 
-  django:
-    name: Django/Python trusted adapter
+  nextjs:
+    name: Next.js App Router SSR + hydration
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Fetch + build vendored VDS logic engine
+        run: npm run setup:vds
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build App Router example
+        run: cd examples/nextjs-app && npm run build
+      - name: Install Playwright browser
+        run: cd examples/nextjs-app && npx playwright install --with-deps chromium
+      - name: Run SSR, hydration and trusted route browser tests
+        run: cd examples/nextjs-app && npm run test:e2e
+
+  django:
+    name: Django ${{ matrix.django }} / Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { django: '5.2', python: '3.10' }
+          - { django: '5.2', python: '3.11' }
+          - { django: '5.2', python: '3.12' }
+          - { django: '5.2', python: '3.13' }
+          - { django: '5.2', python: '3.14' }
+          - { django: '6.1', python: '3.12' }
+          - { django: '6.1', python: '3.13' }
+          - { django: '6.1', python: '3.14' }
+          - { django: '6.1', python: '3.15' }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,17 +84,39 @@ jobs:
           cache: npm
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python }}
+      - name: Fetch + build vendored VDS logic engine
+        run: npm run setup:vds
       - name: Install TS deps (to generate shared IR fixtures)
         run: npm ci --no-audit --no-fund
       - name: Generate compiled IR fixtures from the TS compiler
         run: npx tsx execution-adapters/django/scripts/gen_ir_fixtures.ts
       - name: Install Python test deps
-        run: python3 -m pip install pytest django
+        run: python3 -m pip install pytest 'Django~=${{ matrix.django }}.0'
       - name: Run Django adapter tests (shared conformance + trusted handler + view)
         run: cd execution-adapters/django && python3 -m pytest -q
       - name: Run Django renderer tests (SSR + trusted view)
         run: cd adapters/django && python3 -m pytest -q
+
+  python-packages:
+    name: Python wheels + fresh consumer installation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build both Django wheels
+        run: |
+          python -m pip install build
+          python -m build --wheel --outdir /tmp/vds-wheels execution-adapters/django
+          python -m build --wheel --outdir /tmp/vds-wheels adapters/django
+      - name: Install wheels in a fresh isolated consumer
+        run: |
+          python -m venv /tmp/vds-consumer
+          /tmp/vds-consumer/bin/pip install /tmp/vds-wheels/*.whl 'Django>=5.2,<5.3'
+          cd /tmp
+          /tmp/vds-consumer/bin/python -c "import django, vds_form, vds_form_renderer; print('fresh wheel consumer:', django.get_version())"
 
   laravel:
     name: Laravel/PHP trusted adapter (full verification)
@@ -112,7 +171,43 @@ jobs:
         with:
           channel: stable
           cache: true
-      - name: Flutter test (62-case expression conformance + controller + widget)
+      - name: Diagnose official Dart formatter output (temporary)
+        run: |
+          cd adapters/flutter
+          emit_formatted() {
+            file="$1"
+            dart format "$file"
+            encoded=$(base64 -w0 "$file")
+            chunk=0
+            while [ -n "$encoded" ]; do
+              part=${encoded:0:3000}
+              echo "::notice file=$file,line=1::DARTFMT:$file:$chunk:$part"
+              encoded=${encoded:3000}
+              chunk=$((chunk + 1))
+            done
+          }
+          emit_formatted lib/src/controller.dart
+          emit_formatted test/controller_test.dart
+          emit_formatted test/expr_conformance_test.dart
+      - name: Dart format check — capabilities
+        run: cd adapters/flutter && dart format --set-exit-if-changed lib/src/capabilities.dart
+      - name: Dart format check — controller
+        run: cd adapters/flutter && dart format --set-exit-if-changed lib/src/controller.dart
+      - name: Dart format check — expressions
+        run: cd adapters/flutter && dart format --set-exit-if-changed lib/src/expr.dart
+      - name: Dart format check — validation
+        run: cd adapters/flutter && dart format --set-exit-if-changed lib/src/validation.dart
+      - name: Dart format check — widgets
+        run: cd adapters/flutter && dart format --set-exit-if-changed lib/src/widgets.dart
+      - name: Dart format check — controller tests
+        run: cd adapters/flutter && dart format --set-exit-if-changed test/controller_test.dart
+      - name: Dart format check — widget tests
+        run: cd adapters/flutter && dart format --set-exit-if-changed test/widget_test.dart
+      - name: Dart format check — expression tests
+        run: cd adapters/flutter && dart format --set-exit-if-changed test/expr_conformance_test.dart
+      - name: Flutter analyze
+        run: cd adapters/flutter && flutter analyze
+      - name: Flutter unit and widget tests
         run: cd adapters/flutter && flutter test
 
   compose:

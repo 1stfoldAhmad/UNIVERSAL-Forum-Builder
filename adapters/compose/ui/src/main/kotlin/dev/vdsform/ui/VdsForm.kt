@@ -39,7 +39,7 @@ fun VdsForm(controller: FormController, submitLabel: String = "Submit") {
         }
         LayoutNode(controller, layout) { version }
         Spacer(Modifier.height(16.dp))
-        Button(onClick = { scope.launch { controller.submit() } }, modifier = Modifier.testTag("vds-submit")) { Text(submitLabel) }
+        Button(onClick = { scope.launch { controller.submit() } }, enabled = controller.status != "submitting", modifier = Modifier.testTag("vds-submit")) { Text(submitLabel) }
     }
 }
 

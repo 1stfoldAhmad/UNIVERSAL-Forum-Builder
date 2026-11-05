@@ -83,13 +83,14 @@ function HtmlField({ controller, field, path, locale }: FieldCtx & { field: Norm
     setUploadProgress({ total: 0, completed: 0, index: -1, fileName: null, fraction: 0 });
 
     const result = await uploadAssetBatch({
-      files: Array.from(files).map((f) => ({ name: f.name, size: f.size, type: f.type })),
+      files: Array.from(files).map((f) => ({ name: f.name, size: f.size, type: f.type, identity: f })),
       provider: controller.uploadProvider,
       constraints: { accept: field.validation.accept, maxSizeBytes: field.validation.maxSizeBytes },
       multiple: field.validation.multiple,
       source,
       // Read the live value so appends never clobber a concurrent change.
       currentValue: controller.getFieldValue(path),
+      getCurrentValue: () => controller.getFieldValue(path),
       auth: controller.auth,
       signal: ac.signal,
       // Commit after EVERY success: a later failure keeps earlier assets.

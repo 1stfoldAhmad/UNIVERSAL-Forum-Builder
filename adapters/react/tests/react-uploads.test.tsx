@@ -159,14 +159,14 @@ describe('React upload correctness', () => {
     controller.dispose();
   });
 
-  it('does not re-upload the same file on a repeated interaction', async () => {
+  it('preserves separate same-name browser files without a stable identity', async () => {
     const p = new ScriptedUploadProvider();
     const { controller } = await mount(p);
     await drop('kyc.proofDocs', [pdf('a.pdf')]);
     await waitFor(() => expect(names(controller.getFieldValue('kyc.proofDocs'))).toEqual(['a.pdf']));
     await drop('kyc.proofDocs', [pdf('a.pdf')]);
-    expect(p.calls).toHaveLength(1); // de-duplicated
-    expect(names(controller.getFieldValue('kyc.proofDocs'))).toEqual(['a.pdf']);
+    expect(p.calls).toHaveLength(2); // distinct File objects are preserved
+    expect(names(controller.getFieldValue('kyc.proofDocs'))).toEqual(['a.pdf', 'a.pdf']);
     controller.dispose();
   });
 

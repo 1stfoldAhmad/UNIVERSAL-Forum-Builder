@@ -31,6 +31,8 @@ public final class FormController {
     public private(set) var status = "idle"
     public private(set) var statusMessage: String?
     private var rowSeq = 0
+    private var retryPayload: Data?
+    private var retryKey: String?
     private var listeners: [() -> Void] = []
 
     public init(ir: [String: Any], initialValues: [String: Any] = [:], transport: SubmissionTransport? = nil, drafts: DraftAdapter? = nil, uploads: UploadAdapter? = nil, locale: String? = nil) {
@@ -133,6 +135,7 @@ public final class FormController {
     public func errorsFor(_ path: String) -> [[String: Any]] { issues.filter { $0["path"] as? String == path && $0["severity"] as? String == "error" } }
 
     public func submit() async -> [String: Any] {
+        if status == "submitting" { return ["status": "business-rejected", "code": "SUBMISSION_IN_PROGRESS", "message": "A submission is already in progress."] }
         let found = validate()
         if found.contains(where: { $0["severity"] as? String == "error" }) {
             status = "invalid"; statusMessage = "Please correct the errors below."; notify()
@@ -140,11 +143,18 @@ public final class FormController {
         }
         guard let transport = transport else { status = "failed"; statusMessage = "No submission transport configured."; notify(); return ["status": "config-error", "code": "NO_TRANSPORT"] }
         status = "submitting"; notify()
-        let key = "swiftui-\(Int(Date().timeIntervalSince1970 * 1000))-\(rowSeq)"; rowSeq += 1
+        let signature = try? JSONSerialization.data(withJSONObject: values, options: [.sortedKeys, .fragmentsAllowed])
+        if retryPayload != signature || retryKey == nil {
+            retryPayload = signature
+            retryKey = "swiftui-\(Int(Date().timeIntervalSince1970 * 1000))-\(rowSeq)"
+            rowSeq += 1
+        }
+        let key = retryKey!
         do {
             let result = try await transport(ir["formId"] as! String, values, key)
             let ok = result["status"] as? String == "succeeded"
             status = ok ? "succeeded" : "failed"
+            if ok { retryPayload = nil; retryKey = nil }
             statusMessage = ok ? "Submitted successfully." : (result["message"] as? String ?? result["status"] as? String ?? "")
             if result["status"] as? String == "server-validation-failed", let iss = result["issues"] as? [[String: Any]] { issues = iss }
             notify(); return result

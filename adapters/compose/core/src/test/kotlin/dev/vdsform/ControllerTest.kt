@@ -2,7 +2,10 @@ package dev.vdsform
 
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -61,6 +64,32 @@ class ControllerTest {
     }
 
     @Test
+    fun `concurrent submits share one execution and same payload retries reuse key`() = runBlocking {
+        var calls = 0
+        val keys = mutableListOf<String>()
+        val gate = CompletableDeferred<Map<String, Any?>>()
+        val c = FormController(
+            loadIr("customer-registration"),
+            mapOf("customer" to mapOf("name" to "Ada Lovelace", "email" to "ada@example.com", "type" to "individual", "consent" to true)),
+            transport = SubmissionTransport { _, _, key ->
+                calls++; keys.add(key)
+                if (calls == 1) gate.await() else mapOf("status" to "succeeded")
+            },
+        )
+        c.initialize()
+        val first = async { c.submit() }
+        yield()
+        val concurrent = c.submit()
+        assertEquals("SUBMISSION_IN_PROGRESS", concurrent["code"])
+        assertEquals(1, calls)
+        gate.complete(mapOf("status" to "business-rejected"))
+        first.await()
+        c.submit()
+        assertEquals(2, calls)
+        assertEquals(keys[0], keys[1])
+    }
+
+    @Test
     fun `submit delegates to injected trusted transport`() = runBlocking {
         var sent: Map<String, Any?>? = null
         val c = FormController(
@@ -82,6 +111,11 @@ class ControllerTest {
         @Suppress("UNCHECKED_CAST")
         val ft = m["fieldTypes"] as Map<String, Any?>
         assertTrue(ft.containsKey("text"))
-        assertTrue(!ft.containsKey("signature"))
+        assertEquals("partial", (ft["text"] as Map<*, *>)["status"])
+        assertEquals("unsupported", (ft["signature"] as Map<*, *>)["status"])
+        @Suppress("UNCHECKED_CAST")
+        val features = m["features"] as Map<String, Map<String, String>>
+        assertEquals("unsupported", features["camera"]?.get("status"))
+        assertEquals("unsupported", features["offlineQueue"]?.get("status"))
     }
 }

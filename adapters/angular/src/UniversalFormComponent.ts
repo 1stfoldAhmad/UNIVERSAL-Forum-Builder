@@ -332,12 +332,13 @@ export class UniversalFormComponent implements OnChanges, OnDestroy {
     this.uploadErrors.update((m) => { const n = { ...m }; delete n[path]; return n; });
     // Shared semantics: commit after EVERY success so a later failure keeps earlier assets.
     const result = await uploadAssetBatch({
-      files: Array.from(files).map((x) => ({ name: x.name, size: x.size, type: x.type })),
+      files: Array.from(files).map((x) => ({ name: x.name, size: x.size, type: x.type, identity: x })),
       provider: this.controller.uploadProvider,
       constraints: { accept: f.validation.accept, maxSizeBytes: f.validation.maxSizeBytes },
       multiple: f.validation.multiple,
       source,
       currentValue: this.value(path),
+      getCurrentValue: () => this.value(path),
       auth: this.controller.auth,
       signal: ac.signal,
       commit: (v) => this.set(path, v),

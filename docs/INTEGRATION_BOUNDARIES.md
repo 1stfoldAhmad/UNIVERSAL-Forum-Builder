@@ -22,4 +22,4 @@ No public VDS Database/API/Storage/Notification/Plugin-Host builder source was a
 Production VDS integration is **blocked**, not claimed. Hosts register real operations/providers; TEST adapters must not be presented as production.
 
 ## Packaging
-Release tarballs are built/packed locally and in CI but **not published** without explicit authorization. `@vds-form/vds-logic` is excluded from packing because it depends on a vendored `file:` package. Node adapter durable SQLite stores require Node ≥ 22.5 (`node:sqlite`); the in-memory store works on Node ≥ 20.
+Release tarballs are built/packed locally and in CI but **not published** without explicit authorization. `@vds-form/vds-logic` is excluded from packing because it depends on a vendored `file:` package. The root package engine floor is Node ≥ 22.5 because the trusted adapter's durable SQLite store depends on `node:sqlite`. The CI workflow now declares Node 22, 24 and 26 matrix jobs; only the current local runtime is evidenced by this checkout until those workflow jobs complete.

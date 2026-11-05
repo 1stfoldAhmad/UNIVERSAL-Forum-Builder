@@ -6,7 +6,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.5"
   },
   "workspaces": [
     "packages/*",
@@ -16,7 +16,8 @@
     "tools/*",
     "examples/headless-node",
     "examples/react-app",
-    "examples/expo-app"
+    "examples/expo-app",
+    "examples/nextjs-app"
   ],
   "scripts": {
     "test": "vitest run",

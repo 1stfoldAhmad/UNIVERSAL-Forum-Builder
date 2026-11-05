@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "cases": [
+    {"id":"jpg-alias","name":"photo.jpg","mimeType":"image/jpeg","accept":[".jpg","image/jpeg"],"allowed":true},
+    {"id":"jpeg","name":"photo.jpeg","mimeType":"image/jpeg","accept":[".jpeg"],"allowed":true},
+    {"id":"png-upper","name":"PHOTO.PNG","mimeType":"image/png","accept":[".png"],"allowed":true},
+    {"id":"pdf-upper","name":"FILE.PDF","mimeType":"application/pdf","accept":[".pdf"],"allowed":true},
+    {"id":"missing-mime-extension","name":"photo.JPG","mimeType":"","accept":[".jpg"],"allowed":true},
+    {"id":"unknown-extension","name":"photo.xyz","mimeType":"image/jpeg","accept":[".jpg"],"allowed":false},
+    {"id":"disallowed-mime","name":"photo.png","mimeType":"image/png","accept":["application/pdf"],"allowed":false},
+    {"id":"mime-parameters","name":"file.pdf","mimeType":"application/pdf; charset=binary","accept":["application/pdf"],"allowed":true},
+    {"id":"mime-alias","name":"photo.jpg","mimeType":"image/jpg","accept":["image/jpeg"],"allowed":true}
+  ],
+  "sizeBoundaries": [
+    {"sizeBytes":0,"maxSizeBytes":0,"allowed":true},
+    {"sizeBytes":10,"maxSizeBytes":10,"allowed":true},
+    {"sizeBytes":11,"maxSizeBytes":10,"allowed":false}
+  ]
+}

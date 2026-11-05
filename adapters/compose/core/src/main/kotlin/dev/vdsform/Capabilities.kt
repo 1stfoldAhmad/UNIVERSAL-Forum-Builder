@@ -1,21 +1,41 @@
 package dev.vdsform
 
-/** Renderer capability manifest for the Compose target (shared contract). */
+/** Conservative capability manifest. Partial entries are not full conformance claims. */
 object Capabilities {
-    val SUPPORTED = listOf(
+    private val fieldTypes = listOf(
         "text", "textarea", "email", "password", "url", "phone", "integer", "decimal",
         "currency", "percentage", "duration", "date", "time", "datetime", "select",
         "multiselect", "radio", "checkbox", "switch", "consent", "rating", "range",
-        "color", "file", "image", "computed", "hidden", "group", "repeater", "barcode",
+        "color", "file", "image", "computed", "hidden", "group", "repeater", "barcode", "signature",
     )
+
+    private fun status(value: String): Map<String, String> = mapOf("status" to value)
 
     fun manifest(): Map<String, Any?> = mapOf(
         "target" to "compose",
         "contractVersion" to "1.0.0",
-        "fieldTypes" to SUPPORTED.associateWith { mapOf("fieldType" to it, "supported" to true) },
+        "fieldTypes" to fieldTypes.associateWith { type ->
+            status(when (type) {
+                "hidden" -> "supported"
+                "file", "image", "signature" -> "unsupported"
+                else -> "partial"
+            })
+        },
         "features" to mapOf(
-            "dragDrop" to false, "filePicker" to true, "camera" to true, "offlineQueue" to true,
-            "draftPersistence" to true, "multiStep" to true, "repeaters" to true, "richText" to false, "signature" to false,
+            "dragDrop" to status("unsupported"),
+            "filePicker" to status("unsupported"),
+            "camera" to status("unsupported"),
+            "upload" to status("requires-host-adapter"),
+            "offlineQueue" to status("unsupported"),
+            "draftPersistence" to status("unsupported"),
+            "multiStep" to status("partial"),
+            "repeaters" to status("partial"),
+            "dynamicOptions" to status("partial"),
+            "layout" to status("partial"),
+            "localization" to status("partial"),
+            "accessibility" to status("partial"),
+            "signature" to status("unsupported"),
+            "barcode" to status("partial"),
         ),
     )
 }
