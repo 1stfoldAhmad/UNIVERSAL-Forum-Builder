@@ -283,8 +283,10 @@ class _VdsFormState extends State<VdsForm> {
         // per-tile groupValue/onChanged are deprecated.
         return RadioGroup<String>(
           groupValue: value?.toString(),
-          onChanged: enabled ? (v) => c.setFieldValue(path, v) : null,
-          child: Column(children: opts.map((o) => RadioListTile<String>(value: o['value'].toString(), title: Text(localize(o['label'], c.locale)))).toList()),
+          // RadioGroup requires a non-null callback; the tiles carry `enabled`
+          // and the handler is a no-op when the field is disabled/readonly.
+          onChanged: (v) { if (enabled) c.setFieldValue(path, v); },
+          child: Column(children: opts.map((o) => RadioListTile<String>(value: o['value'].toString(), enabled: enabled, title: Text(localize(o['label'], c.locale)))).toList()),
         );
       case 'checkbox': case 'switch': case 'consent':
         return SwitchListTile(key: Key('vds-input-$path'), value: value == true, title: Text(localize(f['label'], c.locale)), onChanged: enabled ? (v) => c.setFieldValue(path, v) : null);
