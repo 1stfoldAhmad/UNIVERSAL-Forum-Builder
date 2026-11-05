@@ -1,28 +1,30 @@
 /**
  * Shared, framework-free upload-batch semantics for EVERY UI renderer.
  *
- * Before this module existed each renderer (React/Vue/Angular/Expo) accumulated
- * refs in a local array and committed them to the controller only AFTER the whole
- * batch finished. A single rejected file therefore discarded every asset that had
- * already uploaded successfully. These are the corrected, shared rules:
- *
+ * Rules (see also docs/audit/FINAL_COMPLETION_AUDIT_2026.md):
  *  1. Each successful upload is committed IMMEDIATELY, so a later failure never
  *     discards earlier successes (partial success is preserved).
- *  2. Existing assets are preserved when appending to a multi-value field.
+ *  2. Commits merge into the LIVE field value, so a concurrent valid update is
+ *     never clobbered by a stale snapshot taken when the batch started.
  *  3. Failures are reported per file; the batch continues past a failure.
- *  4. MIME/size constraints are enforced BEFORE calling the provider, using the
- *     same issue codes as server-side validation (ASSET_TYPE_REJECTED /
- *     ASSET_TOO_LARGE / MULTIPLE_NOT_ALLOWED) so client and server agree.
- *  5. Re-picking an identical asset (same name + size) is de-duplicated instead of
- *     uploaded twice.
+ *  4. MIME/extension/size constraints use the canonical
+ *     `@vds-form/validation` asset rules, so browser, Expo and the trusted
+ *     server adapters agree (ASSET_TYPE_REJECTED / ASSET_TOO_LARGE /
+ *     MULTIPLE_NOT_ALLOWED).
+ *  5. De-duplication uses RELIABLE identity only (asset ref, native picker id,
+ *     local URI, content fingerprint, or browser file identity). Two different
+ *     files that merely share a name and size are BOTH preserved. When no
+ *     reliable identity exists we never discard an item.
  *  6. Cancellation is cooperative: an aborted signal stops the batch, keeps what
- *     was already committed, and never commits the in-flight result.
- *  7. The asset `source` reflects the real interaction (picker vs drag-drop).
+ *     was already committed, and never commits the in-flight result — even if
+ *     the provider ignores the signal and resolves later.
+ *  7. The asset `source` reflects the real interaction (picker/drag-drop/camera).
  *
- * This module performs no I/O itself: the host-injected UploadProvider does the
- * transfer, and `commit` writes through the renderer's controller.
+ * This module performs no I/O: the host-injected UploadProvider transfers, and
+ * `commit` writes through the renderer's controller.
  */
 import type { AuthContext, UploadProvider, UploadedAssetRef } from '@vds-form/types';
+import { assetSizeAllowed, assetTypeAllowed } from '@vds-form/validation';
 
 export type UploadSource = 'picker' | 'drag-drop' | 'camera';
 
@@ -35,6 +37,12 @@ export interface UploadCandidate {
   id?: string;
   localUri?: string;
   source?: UploadSource;
+  /** Set when the candidate is an already-uploaded asset. */
+  assetRef?: string;
+  /** Caller-computed content fingerprint (e.g. SHA-256), when available. */
+  fingerprint?: string;
+  /** Browser File.lastModified — part of reliable browser file identity. */
+  lastModified?: number;
 }
 
 export interface UploadFailure {
@@ -44,9 +52,7 @@ export interface UploadFailure {
 }
 
 export interface UploadProgress {
-  /** Files considered by this batch (after single-value trimming). */
   total: number;
-  /** Files finished (uploaded, skipped or failed). */
   completed: number;
   /** Zero-based index of the file currently transferring, or -1 when idle. */
   index: number;
@@ -61,10 +67,22 @@ export interface UploadBatchOptions {
   constraints?: { accept?: string[]; maxSizeBytes?: number };
   multiple?: boolean;
   source: UploadSource;
-  /** Current field value, used to append and to de-duplicate. */
+  /** Snapshot used to seed de-duplication and as a merge fallback. */
   currentValue?: unknown;
+  /**
+   * Reads the LIVE field value at commit time. Strongly preferred over
+   * `currentValue`: it prevents a long batch from overwriting assets that
+   * another valid update committed while a transfer was in flight.
+   */
+  readValue?: () => unknown;
   auth?: AuthContext;
   signal?: AbortSignal;
+  /**
+   * Caller-owned ledger of identities already uploaded for this field. Pass a
+   * stable Set (per field/component) to de-duplicate repeated selections across
+   * batches. The batch adds to it as uploads succeed.
+   */
+  seenIdentities?: Set<string>;
   /** Called after EVERY successful upload (and never for a cancelled batch). */
   commit: (value: UploadedAssetRef | UploadedAssetRef[] | null) => void;
   onProgress?: (progress: UploadProgress) => void;
@@ -76,13 +94,20 @@ export interface UploadBatchResult {
   cancelled: boolean;
 }
 
-/** Mirrors the accept-matching rules used by @vds-form/validation. */
-export function mimeAllowed(mimeType: string, accept?: string[]): boolean {
-  if (!accept || accept.length === 0) return true;
-  return accept.some((acc) =>
-    acc === mimeType
-    || (acc.endsWith('/*') && mimeType.startsWith(acc.slice(0, -1)))
-    || (acc.startsWith('.') && mimeType.includes(acc.slice(1))));
+/**
+ * Reliable identity for de-duplication, or null when none exists.
+ * Deliberately does NOT fall back to `name:size` — that collides for distinct
+ * files and would silently discard user data.
+ */
+export function uploadIdentity(c: UploadCandidate): string | null {
+  if (c.assetRef) return `ref:${c.assetRef}`;
+  if (c.id) return `id:${c.id}`;
+  if (c.localUri) return `uri:${c.localUri}`;
+  if (c.fingerprint) return `fp:${c.fingerprint}`;
+  if (typeof c.lastModified === 'number' && Number.isFinite(c.lastModified)) {
+    return `file:${c.name}:${c.size}:${c.lastModified}`;
+  }
+  return null;
 }
 
 function asRefArray(value: unknown): UploadedAssetRef[] {
@@ -90,8 +115,6 @@ function asRefArray(value: unknown): UploadedAssetRef[] {
   if (value && typeof value === 'object') return [value as UploadedAssetRef];
   return [];
 }
-
-const assetKey = (name: string, size: number): string => `${name}:${size}`;
 
 function isAbortError(e: unknown): boolean {
   const err = e as { name?: string; code?: string };
@@ -124,14 +147,17 @@ export async function uploadAssetBatch(opts: UploadBatchOptions): Promise<Upload
     }
   }
 
-  const existing = multiple ? asRefArray(opts.currentValue) : [];
-  const seen = new Set(existing.map((r) => assetKey(r.name, r.sizeBytes)));
-  let accumulated: UploadedAssetRef[] = [...existing];
+  const existing = asRefArray(opts.currentValue);
+  const seen = opts.seenIdentities ?? new Set<string>();
+  for (const r of existing) if (r.assetRef) seen.add(`ref:${r.assetRef}`);
+
+  let accumulated: UploadedAssetRef[] = multiple ? [...existing] : [];
   let completed = 0;
 
   const emit = (index: number, fileName: string | null, fraction: number): void => {
     opts.onProgress?.({ total: files.length, completed, index, fileName, fraction });
   };
+  const liveRefs = (): UploadedAssetRef[] => (opts.readValue ? asRefArray(opts.readValue()) : accumulated);
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
@@ -140,19 +166,22 @@ export async function uploadAssetBatch(opts: UploadBatchOptions): Promise<Upload
     const mimeType = file.type || 'application/octet-stream';
     emit(i, file.name, 0);
 
-    if (opts.constraints?.maxSizeBytes !== undefined && file.size > opts.constraints.maxSizeBytes) {
-      failures.push({ name: file.name, code: 'ASSET_TOO_LARGE', message: `File exceeds ${opts.constraints.maxSizeBytes} bytes.` });
+    if (!assetSizeAllowed(file.size, opts.constraints?.maxSizeBytes)) {
+      failures.push({ name: file.name, code: 'ASSET_TOO_LARGE', message: `File exceeds ${opts.constraints?.maxSizeBytes} bytes.` });
       completed++; emit(i, file.name, 0);
       continue;
     }
-    if (!mimeAllowed(mimeType, opts.constraints?.accept)) {
+    // Pass BOTH the filename and the MIME: extensions match the name, MIME
+    // tokens match the normalized MIME, and either can be inferred from the other.
+    if (!assetTypeAllowed({ name: file.name, mimeType: file.type }, opts.constraints?.accept)) {
       failures.push({ name: file.name, code: 'ASSET_TYPE_REJECTED', message: `File type ${mimeType} is not allowed.` });
       completed++; emit(i, file.name, 0);
       continue;
     }
-    const key = assetKey(file.name, file.size);
-    if (seen.has(key)) {
-      // Already uploaded in this field: do not repeat the upload operation.
+
+    const identity = uploadIdentity(file);
+    if (identity !== null && seen.has(identity)) {
+      // Same reliable asset already uploaded: do not repeat the operation.
       completed++; emit(i, file.name, 1);
       continue;
     }
@@ -172,13 +201,16 @@ export async function uploadAssetBatch(opts: UploadBatchOptions): Promise<Upload
         onProgress: (fraction) => emit(i, file.name, fraction),
         auth: opts.auth,
       });
-      // An obsolete/cancelled batch must not write its result into the form.
+      // An obsolete/cancelled batch must not write its result into the form,
+      // even when the provider ignored the abort signal and resolved anyway.
       if (opts.signal?.aborted) return { uploaded, failures, cancelled: true };
 
-      seen.add(key);
+      if (identity !== null) seen.add(identity);
       uploaded.push(ref);
       if (multiple) {
-        accumulated = [...accumulated, ref];
+        // Merge into the LIVE value so concurrent valid updates survive.
+        const live = liveRefs();
+        accumulated = live.some((r) => r.assetRef === ref.assetRef) ? live : [...live, ref];
         opts.commit(accumulated);
       } else {
         opts.commit(ref);
@@ -193,4 +225,14 @@ export async function uploadAssetBatch(opts: UploadBatchOptions): Promise<Upload
 
   opts.onProgress?.({ total: files.length, completed, index: -1, fileName: null, fraction: 1 });
   return { uploaded, failures, cancelled: false };
+}
+
+/**
+ * MIME-only convenience check retained for callers that have no filename.
+ * Delegates to the canonical rule, so an extension token can still match via
+ * the MIME's well-known extensions (`.pdf` matches `application/pdf`).
+ * Prefer `assetTypeAllowed({ name, mimeType }, accept)` when a filename exists.
+ */
+export function mimeAllowed(mimeType: string, accept?: string[]): boolean {
+  return assetTypeAllowed({ mimeType }, accept);
 }

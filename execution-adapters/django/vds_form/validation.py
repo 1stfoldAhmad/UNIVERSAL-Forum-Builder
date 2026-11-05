@@ -212,12 +212,14 @@ def _validate_one(inst: Dict[str, Any], values: Dict[str, Any], state: Dict[str,
         for a in assets:
             if not isinstance(a, dict):
                 continue
+            # Canonical asset rules: extensions match the FILENAME, MIME tokens
+            # match a normalized MIME (shared fixture: asset-upload.json).
+            from .assets import asset_size_allowed, asset_type_allowed
             mime = a.get("mimeType")
-            if v.get("accept") and mime:
-                ok = any(acc == mime or (acc.endswith("/*") and mime.startswith(acc[:-1])) or (acc.startswith(".") and acc[1:] in mime) for acc in v["accept"])
-                if not ok:
-                    issues.append(_issue("ASSET_TYPE_REJECTED", f"File type {mime} is not allowed.", concrete, field["id"]))
-            if v.get("maxSizeBytes") is not None and isinstance(a.get("sizeBytes"), (int, float)) and a["sizeBytes"] > v["maxSizeBytes"]:
+            if v.get("accept") and (mime or a.get("name")):
+                if not asset_type_allowed(a, v["accept"]):
+                    issues.append(_issue("ASSET_TYPE_REJECTED", f"File type {mime or a.get('name')} is not allowed.", concrete, field["id"]))
+            if not asset_size_allowed(a.get("sizeBytes"), v.get("maxSizeBytes")):
                 issues.append(_issue("ASSET_TOO_LARGE", f"File exceeds {v['maxSizeBytes']} bytes.", concrete, field["id"]))
             if phase == "submit" and not a.get("assetRef"):
                 issues.append(_issue("ASSET_NOT_UPLOADED", "File must be uploaded before submitting.", concrete, field["id"]))

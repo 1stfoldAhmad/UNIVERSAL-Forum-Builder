@@ -162,10 +162,12 @@ describe('React upload correctness', () => {
   it('does not re-upload the same file on a repeated interaction', async () => {
     const p = new ScriptedUploadProvider();
     const { controller } = await mount(p);
-    await drop('kyc.proofDocs', [pdf('a.pdf')]);
+    // Re-selecting the SAME file yields the same File identity (lastModified).
+    const same = pdf('a.pdf');
+    await drop('kyc.proofDocs', [same]);
     await waitFor(() => expect(names(controller.getFieldValue('kyc.proofDocs'))).toEqual(['a.pdf']));
-    await drop('kyc.proofDocs', [pdf('a.pdf')]);
-    expect(p.calls).toHaveLength(1); // de-duplicated
+    await drop('kyc.proofDocs', [same]);
+    expect(p.calls).toHaveLength(1); // de-duplicated by reliable identity
     expect(names(controller.getFieldValue('kyc.proofDocs'))).toEqual(['a.pdf']);
     controller.dispose();
   });

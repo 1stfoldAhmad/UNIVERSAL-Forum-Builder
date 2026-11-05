@@ -280,6 +280,7 @@ export function FileField(props: FieldProps) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const batchRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
+  const uploadIdsRef = useRef<Set<string>>(new Set());
   // Disposal: abort in-flight uploads so a late result cannot commit.
   useEffect(() => {
     mountedRef.current = true;
@@ -311,6 +312,8 @@ export function FileField(props: FieldProps) {
       multiple,
       source: 'picker',
       currentValue: controller.getFieldValue(path),
+      readValue: () => controller.getFieldValue(path),
+      seenIdentities: uploadIdsRef.current,
       auth: controller.auth,
       signal: ac.signal,
       commit: (v) => controller.setFieldValue(path, v),

@@ -8,8 +8,10 @@ import type {
 } from '@vds-form/types';
 import { evaluateBoolean, getPath, type EvalScope } from '@vds-form/expressions';
 import { defaultFieldRegistry, type FieldRegistry } from '@vds-form/fields';
+import { assetSizeAllowed, assetTypeAllowed } from './assets';
 
 export * from './policy';
+export * from './assets';
 
 export interface EffectiveFieldState {
   visibility: Record<string, boolean>;
@@ -189,10 +191,14 @@ function validateOne(
     if (!v.multiple && Array.isArray(value) && value.length > 1) issues.push(issue('MULTIPLE_NOT_ALLOWED', 'Only one file is allowed.', concreteKey, field.id));
     for (const a of assets) {
       const asset = a as { mimeType?: string; sizeBytes?: number; assetRef?: string; localUri?: string };
-      if (v.accept?.length && asset.mimeType && !v.accept.some((acc) => acc === asset.mimeType || (acc.endsWith('/*') && asset.mimeType!.startsWith(acc.slice(0, -1))) || acc.startsWith('.') && asset.mimeType!.includes(acc.slice(1)))) {
-        issues.push(issue('ASSET_TYPE_REJECTED', `File type ${asset.mimeType} is not allowed.`, concreteKey, field.id));
+      // Extensions match the FILENAME, MIME tokens match a normalized MIME.
+      // With no metadata at all there is nothing to judge; the trusted provider
+      // remains authoritative for actual content.
+      const assetMeta = a as { mimeType?: string; name?: string };
+      if (v.accept?.length && (assetMeta.mimeType || assetMeta.name) && !assetTypeAllowed(assetMeta, v.accept)) {
+        issues.push(issue('ASSET_TYPE_REJECTED', `File type ${assetMeta.mimeType ?? assetMeta.name} is not allowed.`, concreteKey, field.id));
       }
-      if (v.maxSizeBytes !== undefined && typeof asset.sizeBytes === 'number' && asset.sizeBytes > v.maxSizeBytes) {
+      if (!assetSizeAllowed(asset.sizeBytes, v.maxSizeBytes)) {
         issues.push(issue('ASSET_TOO_LARGE', `File exceeds ${v.maxSizeBytes} bytes.`, concreteKey, field.id));
       }
       if (opts.phase === 'submit' && !asset.assetRef) {

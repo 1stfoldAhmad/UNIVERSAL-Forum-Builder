@@ -150,9 +150,10 @@ describe('Vue upload correctness (shared semantics)', () => {
     const p = new TestUploadProvider();
     const { controller, wrapper } = await mountForm('kyc-documents.vds.json', { uploadProvider: p });
     const dz = wrapper.get('[data-testid="dropzone-kyc.proofDocs"]');
-    await dz.trigger('drop', { dataTransfer: { files: [pdf('a.pdf')] } });
+    const same = pdf('a.pdf'); // same File identity on re-selection
+    await dz.trigger('drop', { dataTransfer: { files: [same] } });
     await tick();
-    await dz.trigger('drop', { dataTransfer: { files: [pdf('a.pdf')] } });
+    await dz.trigger('drop', { dataTransfer: { files: [same] } });
     await tick();
     expect(p.assets.size).toBe(1);
     expect((controller.getFieldValue('kyc.proofDocs') as unknown[]).length).toBe(1);

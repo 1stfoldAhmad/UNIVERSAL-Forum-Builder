@@ -32,6 +32,7 @@ const VField = defineComponent({
     // Shared, partial-success-safe upload semantics (see @vds-form/runtime).
     // Each success is committed immediately, so a later failure keeps earlier assets.
     let batch: AbortController | null = null;
+    const uploadIds = new Set<string>();
     onUnmounted(() => { batch?.abort(); batch = null; });
 
     const uploadFiles = async (files: FileList | File[], source: 'picker' | 'drag-drop' = 'picker') => {
@@ -41,12 +42,14 @@ const VField = defineComponent({
       uploadError.value = null;
       uploading.value = true;
       const result = await uploadAssetBatch({
-        files: Array.from(files).map((f) => ({ name: f.name, size: f.size, type: f.type })),
+        files: Array.from(files).map((f) => ({ name: f.name, size: f.size, type: f.type, lastModified: f.lastModified })),
         provider: ctrl.uploadProvider,
         constraints: { accept: props.field.validation.accept, maxSizeBytes: props.field.validation.maxSizeBytes },
         multiple: props.field.validation.multiple,
         source,
         currentValue: ctrl.getFieldValue(props.path),
+        readValue: () => ctrl.getFieldValue(props.path),
+        seenIdentities: uploadIds,
         auth: ctrl.auth,
         signal: ac.signal,
         commit: (v) => set(v),

@@ -242,6 +242,7 @@ export class UniversalFormComponent implements OnChanges, OnDestroy {
     this.unsub?.();
     for (const ac of this.uploadBatches.values()) ac.abort();
     this.uploadBatches.clear();
+    this.uploadIds.clear();
   }
 
   loc(text: LocalizedText | undefined): string {
@@ -324,6 +325,7 @@ export class UniversalFormComponent implements OnChanges, OnDestroy {
 
   /** In-flight upload batches, aborted on destroy so late results cannot commit. */
   private uploadBatches = new Map<string, AbortController>();
+  private uploadIds = new Map<string, Set<string>>();
 
   private async upload(path: string, f: NormalizedField, files: FileList, source: 'picker' | 'drag-drop'): Promise<void> {
     if (this.uploadBatches.has(path)) return; // ignore re-entrant interaction
@@ -332,12 +334,14 @@ export class UniversalFormComponent implements OnChanges, OnDestroy {
     this.uploadErrors.update((m) => { const n = { ...m }; delete n[path]; return n; });
     // Shared semantics: commit after EVERY success so a later failure keeps earlier assets.
     const result = await uploadAssetBatch({
-      files: Array.from(files).map((x) => ({ name: x.name, size: x.size, type: x.type })),
+      files: Array.from(files).map((x) => ({ name: x.name, size: x.size, type: x.type, lastModified: x.lastModified })),
       provider: this.controller.uploadProvider,
       constraints: { accept: f.validation.accept, maxSizeBytes: f.validation.maxSizeBytes },
       multiple: f.validation.multiple,
       source,
       currentValue: this.value(path),
+      readValue: () => this.value(path),
+      seenIdentities: (this.uploadIds.get(path) ?? (() => { const s = new Set<string>(); this.uploadIds.set(path, s); return s; })()),
       auth: this.controller.auth,
       signal: ac.signal,
       commit: (v) => this.set(path, v),

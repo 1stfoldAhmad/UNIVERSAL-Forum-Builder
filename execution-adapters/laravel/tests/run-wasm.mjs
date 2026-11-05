@@ -23,6 +23,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const all = [
   'run-conformance.php',
   'run-form-conformance.php',
+  'run-asset-conformance.php',
   'run-idempotency-parity.php',
   'run-submission.php',
   'run-controller.php',

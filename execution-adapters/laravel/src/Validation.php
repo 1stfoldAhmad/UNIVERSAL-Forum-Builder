@@ -185,15 +185,16 @@ final class Validation
             if (empty($v['multiple']) && is_array($value) && array_is_list($value) && count($value) > 1) $issues[] = self::issue('MULTIPLE_NOT_ALLOWED', 'Only one file is allowed.', $concrete, $field['id']);
             foreach ($assets as $a) {
                 if (!is_array($a)) continue;
+                // Canonical asset rules: extensions match the FILENAME, MIME
+                // tokens match a normalized MIME (fixture: asset-upload.json).
                 $mime = $a['mimeType'] ?? null;
-                if (!empty($v['accept']) && $mime) {
-                    $ok = false;
-                    foreach ($v['accept'] as $acc) {
-                        if ($acc === $mime || (str_ends_with($acc, '/*') && str_starts_with($mime, substr($acc, 0, -1))) || (str_starts_with($acc, '.') && str_contains($mime, substr($acc, 1)))) { $ok = true; break; }
+                if (!empty($v['accept']) && ($mime || !empty($a['name']))) {
+                    if (!Assets::typeAllowed($a, $v['accept'])) {
+                        $label = $mime ?: ($a['name'] ?? '');
+                        $issues[] = self::issue('ASSET_TYPE_REJECTED', "File type $label is not allowed.", $concrete, $field['id']);
                     }
-                    if (!$ok) $issues[] = self::issue('ASSET_TYPE_REJECTED', "File type $mime is not allowed.", $concrete, $field['id']);
                 }
-                if (isset($v['maxSizeBytes']) && isset($a['sizeBytes']) && $a['sizeBytes'] > $v['maxSizeBytes']) $issues[] = self::issue('ASSET_TOO_LARGE', "File exceeds {$v['maxSizeBytes']} bytes.", $concrete, $field['id']);
+                if (!Assets::sizeAllowed($a['sizeBytes'] ?? null, $v['maxSizeBytes'] ?? null)) $issues[] = self::issue('ASSET_TOO_LARGE', "File exceeds {$v['maxSizeBytes']} bytes.", $concrete, $field['id']);
                 if ($phase === 'submit' && empty($a['assetRef'])) $issues[] = self::issue('ASSET_NOT_UPLOADED', 'File must be uploaded before submitting.', $concrete, $field['id']);
             }
         }
