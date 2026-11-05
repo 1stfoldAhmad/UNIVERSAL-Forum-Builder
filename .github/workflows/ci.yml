@@ -7,13 +7,17 @@ on:
 
 jobs:
   typescript:
-    name: TypeScript core + renderers + tools
+    name: TypeScript core + renderers + tools (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24, 26]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
           cache: npm
       - name: Fetch + build vendored VDS logic engine
         run: npm run setup:vds
@@ -37,8 +41,21 @@ jobs:
         run: npm run test:packages
 
   django:
-    name: Django/Python trusted adapter
+    name: Django ${{ matrix.django }} / Python ${{ matrix.python }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { django: '5.2', python: '3.10' }
+          - { django: '5.2', python: '3.11' }
+          - { django: '5.2', python: '3.12' }
+          - { django: '5.2', python: '3.13' }
+          - { django: '5.2', python: '3.14' }
+          - { django: '6.1', python: '3.12' }
+          - { django: '6.1', python: '3.13' }
+          - { django: '6.1', python: '3.14' }
+          - { django: '6.1', python: '3.15' }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,7 +64,7 @@ jobs:
           cache: npm
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python }}
       - name: Fetch + build vendored VDS logic engine
         run: npm run setup:vds
       - name: Install TS deps (to generate shared IR fixtures)
@@ -55,7 +72,7 @@ jobs:
       - name: Generate compiled IR fixtures from the TS compiler
         run: npx tsx execution-adapters/django/scripts/gen_ir_fixtures.ts
       - name: Install Python test deps
-        run: python3 -m pip install pytest django
+        run: python3 -m pip install pytest 'Django~=${{ matrix.django }}.0'
       - name: Run Django adapter tests (shared conformance + trusted handler + view)
         run: cd execution-adapters/django && python3 -m pytest -q
       - name: Run Django renderer tests (SSR + trusted view)
@@ -114,7 +131,11 @@ jobs:
         with:
           channel: stable
           cache: true
-      - name: Flutter test (62-case expression conformance + controller + widget)
+      - name: Dart format check
+        run: cd adapters/flutter && dart format --set-exit-if-changed .
+      - name: Flutter analyze
+        run: cd adapters/flutter && flutter analyze
+      - name: Flutter unit and widget tests
         run: cd adapters/flutter && flutter test
 
   compose:

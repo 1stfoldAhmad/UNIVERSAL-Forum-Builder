@@ -9,7 +9,12 @@ description = "VDS Universal Form Builder — Django server-rendered form render
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
-dependencies = ["Django>=4.2"]
+dependencies = []
+
+[project.optional-dependencies]
+django52 = ["Django>=5.2,<5.3"]
+django61 = ["Django>=6.1,<6.2"]
+test = ["pytest>=7"]
 
 [tool.setuptools.packages.find]
 include = ["vds_form_renderer*"]

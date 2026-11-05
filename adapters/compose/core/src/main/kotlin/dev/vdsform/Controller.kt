@@ -37,6 +37,14 @@ class FormController(
     var status = "idle"; private set
     var statusMessage: String? = null; private set
     private var rowSeq = 0
+    private var retryPayload: Map<String, Any?>? = null
+    private var retryKey: String? = null
+
+    private fun snapshot(value: Any?): Any? = when (value) {
+        is Map<*, *> -> value.entries.associate { (key, item) -> key.toString() to snapshot(item) }
+        is List<*> -> value.map { snapshot(it) }
+        else -> value
+    }
     private val listeners = ArrayList<() -> Unit>()
 
     fun addListener(l: () -> Unit) { listeners.add(l) }
@@ -130,14 +138,22 @@ class FormController(
     fun errorsFor(path: String): List<Map<String, Any?>> = issues.filter { it["path"] == path && it["severity"] == "error" }
 
     suspend fun submit(): Map<String, Any?> {
+        if (status == "submitting") return mapOf("status" to "business-rejected", "code" to "SUBMISSION_IN_PROGRESS", "message" to "A submission is already in progress.")
         val found = validate()
         if (found.any { it["severity"] == "error" }) { status = "invalid"; statusMessage = "Please correct the errors below."; notifyListeners(); return mapOf("status" to "server-validation-failed", "issues" to found) }
         val t = transport ?: run { status = "failed"; statusMessage = "No submission transport configured."; notifyListeners(); return mapOf("status" to "config-error", "code" to "NO_TRANSPORT") }
         status = "submitting"; notifyListeners()
-        val key = "compose-${System.currentTimeMillis()}-${rowSeq++}"
+        @Suppress("UNCHECKED_CAST")
+        val payloadSnapshot = snapshot(values) as Map<String, Any?>
+        if (retryPayload != payloadSnapshot || retryKey == null) {
+            retryPayload = payloadSnapshot
+            retryKey = "compose-${System.currentTimeMillis()}-${rowSeq++}"
+        }
+        val key = retryKey!!
         return try {
             val result = t.submit(ir["formId"] as String, values, key)
             status = if (result["status"] == "succeeded") "succeeded" else "failed"
+            if (result["status"] == "succeeded") { retryPayload = null; retryKey = null }
             statusMessage = if (result["status"] == "succeeded") "Submitted successfully." else (result["message"] as? String ?: result["status"] as String)
             @Suppress("UNCHECKED_CAST")
             if (result["status"] == "server-validation-failed") issues = result["issues"] as List<Map<String, Any?>>

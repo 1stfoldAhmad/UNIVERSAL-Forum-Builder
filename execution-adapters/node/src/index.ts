@@ -28,6 +28,8 @@ import {
   type IdempotencyStore,
 } from './idempotency';
 
+export { createNodeHttpHandler, createNodeHttpServer, type NodeHttpOptions } from './http';
+
 export {
   InMemoryIdempotencyStore, SqliteIdempotencyStore,
   canonicalJson, payloadFingerprint, scopedIdempotencyKey,

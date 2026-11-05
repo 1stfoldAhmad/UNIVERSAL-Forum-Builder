@@ -31,7 +31,7 @@ public struct VdsFormView: View {
                     Text(msg).accessibilityIdentifier("vds-status").foregroundColor(c.status == "succeeded" ? .green : .red)
                 }
                 layout(c.ir["layout"] as? [String: Any] ?? [:])
-                Button(submitLabel) { Task { _ = await c.submit() } }.accessibilityIdentifier("vds-submit").buttonStyle(.borderedProminent)
+                Button(submitLabel) { Task { _ = await c.submit() } }.disabled(c.status == "submitting").accessibilityIdentifier("vds-submit").buttonStyle(.borderedProminent)
             }.padding(16)
         }.onAppear { c.initialize() }
     }

@@ -13,8 +13,8 @@
  *  4. MIME/size constraints are enforced BEFORE calling the provider, using the
  *     same issue codes as server-side validation (ASSET_TYPE_REJECTED /
  *     ASSET_TOO_LARGE / MULTIPLE_NOT_ALLOWED) so client and server agree.
- *  5. Re-picking an identical asset (same name + size) is de-duplicated instead of
- *     uploaded twice.
+ *  5. Re-picking is de-duplicated only when a stable identity is available
+ *     (provider/native reference, local URI, or the same browser object).
  *  6. Cancellation is cooperative: an aborted signal stops the batch, keeps what
  *     was already committed, and never commits the in-flight result.
  *  7. The asset `source` reflects the real interaction (picker vs drag-drop).
@@ -85,7 +85,8 @@ export interface UploadBatchResult {
 /** Mirrors the accept-matching rules used by @vds-form/validation. */
 export function mimeAllowed(mimeType: string, accept?: string[], fileName?: string): boolean {
   if (!accept || accept.length === 0) return true;
-  const mime = mimeType.trim().toLowerCase().split(';', 1)[0];
+  const rawMime = mimeType.trim().toLowerCase().split(';', 1)[0];
+  const mime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
   const extension = fileName?.match(/\.[^./]+$/)?.[0]?.toLowerCase();
   return accept.some((raw) => {
     const acc = raw.trim().toLowerCase();
@@ -163,7 +164,8 @@ export async function uploadAssetBatch(opts: UploadBatchOptions): Promise<Upload
     const file = files[i];
     if (opts.signal?.aborted) return { uploaded, failures, cancelled: true };
 
-    const mimeType = file.type?.trim().toLowerCase().split(';', 1)[0] || 'application/octet-stream';
+    const rawMime = file.type?.trim().toLowerCase().split(';', 1)[0];
+    const mimeType = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime || 'application/octet-stream';
     emit(i, file.name, 0);
 
     if (opts.constraints?.maxSizeBytes !== undefined && file.size > opts.constraints.maxSizeBytes) {

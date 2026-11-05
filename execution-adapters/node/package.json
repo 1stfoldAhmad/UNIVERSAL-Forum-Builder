@@ -2,6 +2,9 @@
   "name": "@vds-form/execution-node",
   "version": "0.2.0",
   "license": "Apache-2.0",
+  "engines": { "node": ">=22.5" },
+  "peerDependencies": { "@types/node": ">=22" },
+  "peerDependenciesMeta": { "@types/node": { "optional": true } },
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

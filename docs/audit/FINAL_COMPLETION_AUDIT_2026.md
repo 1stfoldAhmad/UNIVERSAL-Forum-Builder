@@ -18,9 +18,12 @@ This audit supersedes any older completion language that implies all requested p
 1. Shared upload de-duplication no longer equates `filename:size` with identity. Stable assetRef/local URI/native ID/provider object identity can deduplicate; unknown identity preserves the candidate. Browser renderers pass original `File` identity through to shared upload logic.
 2. MIME checks normalize case/parameters and compare extension accept tokens to the actual filename suffix, rather than searching MIME text for an extension. MIME tokens remain MIME comparisons. Client metadata remains advisory; trusted providers must verify content.
 3. Shared upload commits can read live current state through `getCurrentValue` to avoid overwriting concurrent field updates. Callers should supply this getter whenever the controller state can mutate during a transfer.
-4. Added regression assertions for matching name/size but distinct files and case-insensitive `.jpg`, `.jpeg`, `.png`, `.pdf` matching.
-5. Updated the Django CI job to run `npm run setup:vds` before `npm ci`.
-6. Added the platform-neutral renderer conformance contract and a cautious support matrix. The matrix explicitly records that this commit does not verify all native or cross-language targets.
+4. Added upload conformance fixtures and tests for matching name/size but distinct files, case-insensitive `.jpg`, `.jpeg`, `.png`, `.pdf`, missing MIME, MIME aliases/parameters, unknown extensions and size boundaries. TypeScript and Python fixture tests pass locally; corresponding PHP fixture test was added but could not be executed because PHP is not installed here.
+5. Updated the Django CI job to run `npm run setup:vds` before `npm ci`, declared the requested Django/Python matrix, and split package extras for Django 5.2 and 6.1. Matrix outcomes remain pending. Declared Laravel 13 as a runtime dependency of the Laravel renderer package with PHP 8.3 floor.
+6. Added a built-in Node HTTP integration with method/content-type checks, bounded parsing, body-auth rejection, injected trusted identity, correlation IDs, safe errors and HTTP status mapping; added HTTP lifecycle tests.
+7. Raised root and Node execution package engine floors to `>=22.5` and declared Node 22/24/26 CI matrix jobs; remote matrix outcomes remain pending.
+8. Added controller-level duplicate-submit guards in Flutter, Compose and SwiftUI, disabled their submit actions while in-flight, and retained retry keys for unchanged payloads while issuing a new key when payload changes. Deferred concurrency/retry tests were added, but no Dart/Gradle/Swift toolchain is available locally to execute them.
+9. Added the platform-neutral renderer conformance contract and a cautious support matrix. The matrix explicitly records that this commit does not verify all native or cross-language targets.
 
 ## Exact local verification
 
@@ -29,24 +32,24 @@ All commands were run in this workspace against the starting source plus the des
 - `npm run setup:vds` — pass; vendored `vds-json-logic` build completed.
 - `npm ci` — pass; 737 packages installed; audit output as above.
 - `npm run typecheck` — pass.
-- `npx vitest run` — **332 tests passed in 30 files** (core, web, Angular and Expo RN-web native project). This run does not include Flutter, Compose, or SwiftUI.
+- `npx vitest run` — **346 tests passed in 32 files** on Node 22.22.3 (core, web, Angular, Expo RN-web and Node HTTP). This run does not include Flutter, Compose, SwiftUI, Node 24 or Node 26.
 - `npx tsx tools/cli/src/bin.ts conformance` — **96/96 passed**.
 - `npm run build:packages && npm run pack:packages && npm run test:packages` — pass; package build/pack and fresh external consumer smoke completed, no publication.
-- Django execution adapter: `.venv/bin/python -m pytest -q` from `execution-adapters/django` — **74 passed**.
+- Django execution adapter: `.venv/bin/python -m pytest -q` from `execution-adapters/django` — **75 passed**.
 - Django renderer: `.venv/bin/python -m pytest -q` from `adapters/django` — **12 passed**.
 
 The system Python initially lacked pytest; a repository-local ignored `.venv` was used. The Python run covers Django 5.2.19 / Python 3.11 only.
 
 ## Security and boundaries
 
-No Django security code was altered in this change; the existing real-middleware CSRF tests remain in the source. This run did not rerun the Laravel 13 application lifecycle, nor independently audit all CSRF flows. No production Database/API or Auth/RBAC Builder provider was introduced. Host applications must supply real registered operations and server-derived trusted identity; TEST adapters remain test-only. The independent Expo SDK 58 project was not touched. No packages were published and no PR was merged.
+Django asset validation was updated; no Django CSRF/authentication code was changed. Existing real-middleware CSRF tests remain in the source. This run did not rerun the Laravel 13 application lifecycle, nor independently audit all CSRF flows. No production Database/API or Auth/RBAC Builder provider was introduced. Host applications must supply real registered operations and server-derived trusted identity; TEST adapters remain test-only. The independent Expo SDK 58 project was not touched. No packages were published and no PR was merged.
 
 ## Remaining blockers / partial work
 
 - Native Flutter, Compose and SwiftUI UI controls, layout semantics, upload flow, lifecycle and concurrent-submit behavior have not been completed or verified by this run. Do not advertise capabilities solely from manifests.
 - Laravel 13 still needs actual service-provider/route/controller/session/CSRF request-lifecycle and fresh-consumer tests; the existing manual Request/process path is not sufficient proof.
 - Django requested full Django 5.2 / 6.1 and Python 3.10–3.15 compatible matrices were not run. Confirm supported official patch availability and metadata before claiming those combinations.
-- Node 22/24/26 runtime matrix and a standard Node HTTP integration layer remain outstanding; engine declaration is not aligned with the requested maintained runtime baseline.
+- Node HTTP boundary is implemented and locally tested on Node 22.22.3. Remote Node 22/24/26 matrix results remain pending.
 - Next.js App Router example and SSR/hydration CI integration remain outstanding.
 - React/Vue/Angular/Expo full field/layout/accessibility/localization conformance audit remains outstanding.
 - Shared renderer conformance specification is now documented but six-language fixture execution and actual native UI-level tests are not established.

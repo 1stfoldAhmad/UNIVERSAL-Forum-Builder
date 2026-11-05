@@ -74,9 +74,7 @@ const result = await handler.handle(
 When you expose this over HTTP, derive `auth` exclusively from your verified
 server-side session / token middleware. Do **not** forward any client-supplied
 `auth`, and do **not** forward a client `operationRef` (the handler rejects
-overrides, but the cleanest boundary is to never pass one). See the Django and
-Laravel adapters for reference HTTP layers that reject body-supplied auth with
-`400 AUTH_IN_BODY_FORBIDDEN`.
+overrides, but the cleanest boundary is to never pass one). Use `createNodeHttpServer` / `createNodeHttpHandler` for the built-in Node HTTP boundary; inject a verified `resolveAuth` callback. The adapter rejects body-supplied auth with `400 AUTH_IN_BODY_FORBIDDEN`, bounds JSON request sizes, checks method/content type, emits correlation IDs, and maps safe errors to HTTP status codes. Express/Fastify remain optional host integrations.
 
 ## Idempotency storage
 

@@ -16,7 +16,7 @@ This matrix is a conservative audit snapshot. Capability manifests exist per tar
 
 ## Runtime/framework and package evidence
 
-- Node in this workspace: installed packages, TypeScript typecheck, 332 Vitest tests, 96 shared conformance cases and npm build/pack/fresh-consumer smoke all pass. The root engine currently still advertises `>=20`; requested Node 22/24/26 matrix is not verified here.
+- Node in this workspace: installed packages, TypeScript typecheck, 332 Vitest tests, 96 shared conformance cases and npm build/pack/fresh-consumer smoke all pass. The root engine floor is now `>=22.5`; workflow matrix declares Node 22/24/26, but remote job outcomes are not verified in this local run.
 - Django: the local run used Python 3.11 and Django 5.2.19; execution adapter 74 tests and SSR adapter 12 tests pass. This does not verify the requested full Python/Django matrix.
 - Laravel 13: not verified in this sandbox; existing workflow evidence is not a complete replacement for actual full lifecycle acceptance.
 - Flutter / Compose / SwiftUI: no toolchain results in this local run.

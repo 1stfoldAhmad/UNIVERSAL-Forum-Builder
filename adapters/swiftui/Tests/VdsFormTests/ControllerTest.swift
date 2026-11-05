@@ -53,6 +53,33 @@ final class ControllerTest: XCTestCase {
         XCTAssertEqual(result["status"] as? String, "server-validation-failed")
     }
 
+    func testConcurrentSubmitDoesNotDuplicateAndRetryKeepsAttemptKey() async throws {
+        var calls = 0
+        var keys: [String] = []
+        let c = FormController(
+            ir: try loadIr("customer-registration"),
+            initialValues: ["customer": ["name": "Ada Lovelace", "email": "ada@example.com", "type": "individual", "consent": true]],
+            transport: { _, _, key in
+                calls += 1; keys.append(key)
+                if calls == 1 {
+                    try await Task.sleep(nanoseconds: 80_000_000)
+                    return ["status": "business-rejected"]
+                }
+                return ["status": "succeeded"]
+            }
+        )
+        c.initialize()
+        let first = Task { await c.submit() }
+        await Task.yield()
+        let concurrent = await c.submit()
+        XCTAssertEqual(concurrent["code"] as? String, "SUBMISSION_IN_PROGRESS")
+        XCTAssertEqual(calls, 1)
+        _ = await first.value
+        _ = await c.submit()
+        XCTAssertEqual(calls, 2)
+        XCTAssertEqual(keys[0], keys[1])
+    }
+
     func testSubmitDelegatesToTransport() async throws {
         var sent: [String: Any]?
         let c = FormController(

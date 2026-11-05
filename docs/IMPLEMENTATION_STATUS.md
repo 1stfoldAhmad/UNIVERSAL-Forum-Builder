@@ -4,9 +4,9 @@ Status labels: `not-started` · `in-progress` · `implemented` · `verified` · 
 A row is **verified** only when its acceptance criteria passed via the recorded command.
 Final narrative audit: `docs/FINAL_IMPLEMENTATION_AUDIT.md`.
 
-Last updated: 2026-11-05 — **2026 completion cycle**, branch `arena/ba37c6a7-universal-forum-builder`, baseline `main` @ `ab85ea7`.
-Baseline evidence: `docs/audit/BASELINE_2026.md`. Phase 1 security report: `docs/audit/SECURITY_REMEDIATION.md`.
-Earlier cycles (PRs #1–#5) are merged; their dated reports remain historical. No package publication is authorized. Physical-device verification remains **pending**.
+Last updated: 2026-11-05 — follow-up verification on Arena branch `arena/db4480c4-universal-forum-builder`, starting at `da69dfaed5978cd97e65c6b08e00f2f30475db6c`. Earlier ledger entries below preserve their historical measurements; the current audit at `docs/audit/FINAL_COMPLETION_AUDIT_2026.md` supersedes their completion claims where they conflict.
+
+Current measured follow-up: 346 Vitest tests / 32 files pass on Node 22.22.3; typecheck passes; shared CLI conformance 96/96; Django execution adapter 75 tests and Django renderer 12 tests pass locally on Python 3.11 / Django 5.2.19; npm build/pack/fresh consumer smoke passed after the Node HTTP and validation additions. The repository remains **partial / not accepted as fully complete**: native Flutter/Compose/SwiftUI behavior, Laravel 13 HTTP lifecycle, full runtime matrices, Next.js example and six-language form conformance remain outstanding. No package publication is authorized. Physical-device verification remains **pending**.
 
 ## Test totals (actual, this sandbox)
 
@@ -28,7 +28,7 @@ Earlier cycles (PRs #1–#5) are merged; their dated reports remain historical. 
 > Reproducibility: run `npm run setup:vds` **before** `npm ci`. The reverse order
 > leaves an incomplete vendored `vds-json-logic` and breaks typecheck (see
 > BASELINE_2026 §4). Native toolchains (Dart/JDK/Swift) and real PHP are **not**
-> available in this sandbox; those targets are verified in CI only.
+> available in this sandbox. Their present CI workflow declarations are not proof of green results for this follow-up branch; see final audit.
 
 ## 2026 completion-cycle phase tracker
 
@@ -36,15 +36,15 @@ Earlier cycles (PRs #1–#5) are merged; their dated reports remain historical. 
 |---|---|---|---|
 | 0 | Baseline + repository audit | **verified** | `docs/audit/BASELINE_2026.md` (measured commands, real outputs) |
 | 1 | Django CSRF + renderer upload correctness + security regression | **verified** | `docs/audit/SECURITY_REMEDIATION.md`; 19 CSRF tests via real middleware; 16 React + 14 shared + 2 Vue + 2 Angular upload tests |
-| 2 | `specifications/renderer-conformance/` contract spec | not-start | — |
-| 3 | Flutter renderer depth (layouts, fields, example, analyze/format gates) | in-progress | Core runtime + 62-case conformance CI-green; layout/widget depth outstanding |
-| 4 | Compose renderer depth (layouts, fields, sample app, a11y) | in-progress | `:core:test` + `:ui:compileDebugKotlin` CI-green; depth outstanding |
-| 5 | SwiftUI renderer depth (layouts, fields, example, a11y) | in-progress | `swift test` CI-green on macOS; depth outstanding |
-| 6 | Laravel 13 full integration (HTTP/auth/CSRF/persistence, PHP matrix) | in-progress | Real PHP 8.3 + Illuminate container CI-green; full app tests outstanding |
-| 7 | Django/Python compatibility matrix + warnings | in-progress | 5.2 / Python 3.11 verified locally; matrix outstanding |
-| 8 | Node 22/24/26 matrix, engines, HTTP surface | not-start | `engines` still `>=20` |
+| 2 | `specifications/renderer-conformance/` contract spec | **implemented, not fully verified** | Contract exists; shared fixture execution is partial only |
+| 3 | Flutter renderer depth (layouts, fields, example, analyze/format gates) | **partial** | Submission duplicate guard/retry key and CI analyze/format/test gates declared; native toolchain and full functional parity outstanding |
+| 4 | Compose renderer depth (layouts, fields, sample app, a11y) | **partial** | Submission guard/retry behavior and UI disable added with tests; toolchain execution and functional parity outstanding |
+| 5 | SwiftUI renderer depth (layouts, fields, example, a11y) | **partial** | Submission guard/retry behavior and test added; toolchain execution and functional parity outstanding |
+| 6 | Laravel 13 full integration (HTTP/auth/CSRF/persistence, PHP matrix) | **partial** | Runtime dependency declared; real Laravel 13 lifecycle tests and PHP matrix remain unverified |
+| 7 | Django/Python compatibility matrix + warnings | **partial** | 5.2 / Python 3.11 verified locally; matrix declared but all other combinations pending |
+| 8 | Node 22/24/26 matrix, engines, HTTP surface | **partial** | Engine floor and built-in HTTP adapter implemented; local Node 22 tests pass; Node 24/26 remote results pending |
 | 9 | Existing renderer field-by-field parity + Next.js example | in-progress | Upload parity done (Phase 1); Next.js example outstanding |
-| 10 | Generated `PLATFORM_SUPPORT_MATRIX.md` | not-start | — |
+| 10 | Generated `PLATFORM_SUPPORT_MATRIX.md` | **partial** | Conservative matrix exists but is not generated from uniform manifests; no optimism claims |
 | 11 | Cross-language conformance expansion (26 areas) | in-progress | expressions 62 + forms 11 + idempotency/limits/security shared today |
 | 12 | CI matrices for every target | in-progress | 7 jobs green; version matrices outstanding |
 | 13 | Non-npm packaging evidence (wheel/composer/pub/gradle/swift) | not-start | npm build/pack/smoke verified |

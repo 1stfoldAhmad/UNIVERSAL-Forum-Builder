@@ -3,6 +3,8 @@
 /// injected trusted transport (the client never executes business operations).
 library;
 
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
 import 'expr.dart';
@@ -36,6 +38,8 @@ class FormController extends ChangeNotifier {
   String status = 'idle';
   String? statusMessage;
   int _rowSeq = 0;
+  String? _retrySignature;
+  String? _retryKey;
 
   FormController({required this.ir, Map<String, dynamic>? initialValues, this.transport, this.drafts, this.uploads, String? locale})
       : locale = locale ?? (ir['localization']?['defaultLocale'] as String? ?? 'en') {
@@ -140,6 +144,7 @@ class FormController extends ChangeNotifier {
       issues.where((i) => i['path'] == path && i['severity'] == 'error').toList();
 
   Future<Map<String, dynamic>> submit() async {
+    if (status == 'submitting') return {'status': 'business-rejected', 'code': 'SUBMISSION_IN_PROGRESS', 'message': 'A submission is already in progress.'};
     final found = validate();
     if (found.any((i) => i['severity'] == 'error')) {
       status = 'invalid'; statusMessage = 'Please correct the errors below.'; notifyListeners();
@@ -150,10 +155,16 @@ class FormController extends ChangeNotifier {
       return {'status': 'config-error', 'code': 'NO_TRANSPORT'};
     }
     status = 'submitting'; notifyListeners();
-    final key = 'flutter-${DateTime.now().millisecondsSinceEpoch}-${_rowSeq++}';
+    final signature = jsonEncode(values);
+    if (_retrySignature != signature || _retryKey == null) {
+      _retrySignature = signature;
+      _retryKey = 'flutter-${DateTime.now().millisecondsSinceEpoch}-${_rowSeq++}';
+    }
+    final key = _retryKey!;
     try {
       final result = await transport!(ir['formId'] as String, values, key);
       status = result['status'] == 'succeeded' ? 'succeeded' : 'failed';
+      if (result['status'] == 'succeeded') { _retryKey = null; _retrySignature = null; }
       statusMessage = result['status'] == 'succeeded' ? 'Submitted successfully.' : (result['message'] as String? ?? result['status'] as String);
       if (result['status'] == 'server-validation-failed') issues = List<Map<String, dynamic>>.from(result['issues'] as List);
       notifyListeners();

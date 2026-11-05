@@ -1,3 +1,7 @@
+# Historical implementation audit
+
+> **Superseded:** This earlier audit is retained as a historical record. Its assertions are not current completion evidence. See `docs/audit/FINAL_COMPLETION_AUDIT_2026.md` for the current conservative readiness assessment and verified commands.
+
 # Final implementation audit — VDS Universal Form Builder
 
 Date: 2026-11-04 · Branch: `arena/1df95a3a-universal-forum-builder`

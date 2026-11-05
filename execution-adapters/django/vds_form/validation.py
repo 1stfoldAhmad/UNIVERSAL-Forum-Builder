@@ -212,11 +212,20 @@ def _validate_one(inst: Dict[str, Any], values: Dict[str, Any], state: Dict[str,
         for a in assets:
             if not isinstance(a, dict):
                 continue
-            mime = a.get("mimeType")
-            if v.get("accept") and mime:
-                ok = any(acc == mime or (acc.endswith("/*") and mime.startswith(acc[:-1])) or (acc.startswith(".") and acc[1:] in mime) for acc in v["accept"])
-                if not ok:
-                    issues.append(_issue("ASSET_TYPE_REJECTED", f"File type {mime} is not allowed.", concrete, field["id"]))
+            mime = (a.get("mimeType") or "").split(";", 1)[0].strip().lower()
+            if mime == "image/jpg":
+                mime = "image/jpeg"
+            if v.get("accept"):
+                name = str(a.get("name") or "")
+                extension = ("." + name.rsplit(".", 1)[-1].lower()) if "." in name.rsplit("/", 1)[-1] else ""
+                def accepted(raw: str) -> bool:
+                    acc = raw.strip().lower()
+                    if acc.startswith("."):
+                        return bool(extension) and extension == acc
+                    acc = "image/jpeg" if acc == "image/jpg" else acc
+                    return acc == mime or (acc.endswith("/*") and mime.startswith(acc[:-1]))
+                if not any(accepted(acc) for acc in v["accept"]):
+                    issues.append(_issue("ASSET_TYPE_REJECTED", f"File type {a.get('mimeType') or 'unknown'} is not allowed.", concrete, field["id"]))
             if v.get("maxSizeBytes") is not None and isinstance(a.get("sizeBytes"), (int, float)) and a["sizeBytes"] > v["maxSizeBytes"]:
                 issues.append(_issue("ASSET_TOO_LARGE", f"File exceeds {v['maxSizeBytes']} bytes.", concrete, field["id"]))
             if phase == "submit" and not a.get("assetRef"):

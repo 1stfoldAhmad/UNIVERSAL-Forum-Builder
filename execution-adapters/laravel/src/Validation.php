@@ -185,13 +185,23 @@ final class Validation
             if (empty($v['multiple']) && is_array($value) && array_is_list($value) && count($value) > 1) $issues[] = self::issue('MULTIPLE_NOT_ALLOWED', 'Only one file is allowed.', $concrete, $field['id']);
             foreach ($assets as $a) {
                 if (!is_array($a)) continue;
-                $mime = $a['mimeType'] ?? null;
-                if (!empty($v['accept']) && $mime) {
+                $mime = strtolower(trim(explode(';', (string)($a['mimeType'] ?? ''))[0]));
+                if ($mime === 'image/jpg') $mime = 'image/jpeg';
+                if (!empty($v['accept'])) {
+                    $name = basename((string)($a['name'] ?? ''));
+                    $ext = pathinfo($name, PATHINFO_EXTENSION);
+                    $extension = $ext !== '' ? '.' . strtolower($ext) : '';
                     $ok = false;
-                    foreach ($v['accept'] as $acc) {
-                        if ($acc === $mime || (str_ends_with($acc, '/*') && str_starts_with($mime, substr($acc, 0, -1))) || (str_starts_with($acc, '.') && str_contains($mime, substr($acc, 1)))) { $ok = true; break; }
+                    foreach ($v['accept'] as $raw) {
+                        $acc = strtolower(trim($raw));
+                        if (str_starts_with($acc, '.')) $match = $extension !== '' && $extension === $acc;
+                        else {
+                            if ($acc === 'image/jpg') $acc = 'image/jpeg';
+                            $match = $acc === $mime || (str_ends_with($acc, '/*') && str_starts_with($mime, substr($acc, 0, -1)));
+                        }
+                        if ($match) { $ok = true; break; }
                     }
-                    if (!$ok) $issues[] = self::issue('ASSET_TYPE_REJECTED', "File type $mime is not allowed.", $concrete, $field['id']);
+                    if (!$ok) $issues[] = self::issue('ASSET_TYPE_REJECTED', 'File type ' . (($a['mimeType'] ?? '') ?: 'unknown') . ' is not allowed.', $concrete, $field['id']);
                 }
                 if (isset($v['maxSizeBytes']) && isset($a['sizeBytes']) && $a['sizeBytes'] > $v['maxSizeBytes']) $issues[] = self::issue('ASSET_TOO_LARGE', "File exceeds {$v['maxSizeBytes']} bytes.", $concrete, $field['id']);
                 if ($phase === 'submit' && empty($a['assetRef'])) $issues[] = self::issue('ASSET_NOT_UPLOADED', 'File must be uploaded before submitting.', $concrete, $field['id']);
