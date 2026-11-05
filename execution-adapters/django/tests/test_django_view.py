@@ -36,12 +36,30 @@ def _handler(rbac=None, security=None):
     return TrustedSubmissionHandler({"contact": ir}, ops, rbac=rbac)
 
 
+def _csrf(request):
+    """Attach a valid CSRF cookie+header pair using Django's public get_token().
+
+    The view is CSRF-protected by default (Phase 1 security fix). These unit-style
+    tests must therefore satisfy the CSRF boundary rather than bypass it; the
+    rejection paths are covered in test_django_csrf.py through real middleware.
+    """
+    from django.conf import settings as dj_settings
+    from django.middleware.csrf import get_token
+
+    token = get_token(request)  # creates the secret in META["CSRF_COOKIE"]
+    # Django reads the secret from the cookie (>=5.2) or META (older); set both
+    # so the helper is portable across the supported Django matrix.
+    request.COOKIES[dj_settings.CSRF_COOKIE_NAME] = request.META["CSRF_COOKIE"]
+    request.META[dj_settings.CSRF_HEADER_NAME] = token
+    return request
+
+
 def _post(view, body, user=None):
     rf = RequestFactory()
     request = rf.post("/api/forms/submit", data=json.dumps(body), content_type="application/json")
     if user is not None:
         request.user = user
-    return view(request)
+    return view(_csrf(request))
 
 
 class _User:
@@ -129,5 +147,5 @@ def test_view_rejects_non_post():
 def test_view_rejects_invalid_json():
     view = create_submission_view(_handler())
     rf = RequestFactory()
-    resp = view(rf.post("/api/forms/submit", data="{not json", content_type="application/json"))
+    resp = view(_csrf(rf.post("/api/forms/submit", data="{not json", content_type="application/json")))
     assert resp.status_code == 400

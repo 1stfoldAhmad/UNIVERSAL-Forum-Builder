@@ -125,3 +125,37 @@ describe('Vue renderer', () => {
     controller.dispose();
   });
 });
+
+describe('Vue upload correctness (shared semantics)', () => {
+  const failing = (bad: string) => ({
+    scheme: 'test',
+    async upload(req: { asset: { name: string; mimeType: string; sizeBytes: number } }) {
+      if (req.asset.name === bad) throw new Error(`boom ${bad}`);
+      return { assetRef: `ref-${req.asset.name}`, name: req.asset.name, mimeType: req.asset.mimeType, sizeBytes: req.asset.sizeBytes };
+    },
+  });
+  const pdf = (n: string) => new File(['x'], n, { type: 'application/pdf' });
+
+  it('keeps successful uploads when another file in the batch fails', async () => {
+    const { controller, wrapper } = await mountForm('kyc-documents.vds.json', { uploadProvider: failing('b.pdf') as never });
+    await wrapper.get('[data-testid="dropzone-kyc.proofDocs"]').trigger('drop', { dataTransfer: { files: [pdf('a.pdf'), pdf('b.pdf'), pdf('c.pdf')] } });
+    await tick(); await wrapper.vm.$nextTick();
+    const names = (controller.getFieldValue('kyc.proofDocs') as { name: string }[]).map((a) => a.name);
+    expect(names).toEqual(['a.pdf', 'c.pdf']);
+    expect(wrapper.get('[data-testid="upload-error-kyc.proofDocs"]').text()).toContain('b.pdf');
+    controller.dispose(); wrapper.unmount();
+  });
+
+  it('de-duplicates a repeated file instead of uploading it twice', async () => {
+    const p = new TestUploadProvider();
+    const { controller, wrapper } = await mountForm('kyc-documents.vds.json', { uploadProvider: p });
+    const dz = wrapper.get('[data-testid="dropzone-kyc.proofDocs"]');
+    await dz.trigger('drop', { dataTransfer: { files: [pdf('a.pdf')] } });
+    await tick();
+    await dz.trigger('drop', { dataTransfer: { files: [pdf('a.pdf')] } });
+    await tick();
+    expect(p.assets.size).toBe(1);
+    expect((controller.getFieldValue('kyc.proofDocs') as unknown[]).length).toBe(1);
+    controller.dispose(); wrapper.unmount();
+  });
+});

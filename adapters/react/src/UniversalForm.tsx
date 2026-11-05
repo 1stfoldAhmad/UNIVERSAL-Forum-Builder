@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import type { FormController } from '@vds-form/runtime';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { uploadAssetBatch, type FormController, type UploadFailure, type UploadProgress } from '@vds-form/runtime';
 import type { LayoutNode, NormalizedField, SubmissionResult, UploadedAssetRef } from '@vds-form/types';
 import { localize } from '@vds-form/validation';
 import { useField, useFormSnapshot } from './hooks';
@@ -60,31 +60,55 @@ function HtmlField({ controller, field, path, locale }: FieldCtx & { field: Norm
   const slice = useField(controller, path);
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [uploadFailures, setUploadFailures] = useState<UploadFailure[]>([]);
+  const batchRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
   const value = slice.value;
-  const uploadFiles = useCallback(async (files: FileList | File[]) => {
-    if (!controller.uploadProvider) { setUploadError('No upload provider registered.'); return; }
-    setUploadError(null);
-    const refs: UploadedAssetRef[] = [];
-    try {
-      for (const file of Array.from(files)) {
-        setUploadProgress(0);
-        const ref = await controller.uploadProvider.upload({
-          asset: { id: `${file.name}-${file.size}`, name: file.name, mimeType: file.type || 'application/octet-stream', sizeBytes: file.size, source: 'drag-drop' },
-          constraints: { accept: field.validation.accept, maxSizeBytes: field.validation.maxSizeBytes },
-          onProgress: setUploadProgress,
-          auth: controller.auth,
-        });
-        refs.push(ref);
-      }
-      controller.setFieldValue(path, field.validation.multiple ? [...(Array.isArray(value) ? (value as UploadedAssetRef[]) : []), ...refs] : refs[0]);
-    } catch (e) {
-      setUploadError((e as Error).message);
-    } finally {
-      setUploadProgress(null);
-    }
-  }, [controller, field, path, value]);
+
+  // Disposal: abort any in-flight upload so a late result cannot touch a
+  // controller that no longer belongs to this component.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; batchRef.current?.abort(); batchRef.current = null; };
+  }, []);
+
+  const uploadFiles = useCallback(async (files: FileList | File[], source: 'picker' | 'drag-drop') => {
+    // Safely ignore a new interaction while a batch is in flight; this prevents
+    // duplicate upload operations for the same files.
+    if (batchRef.current) return;
+    const ac = new AbortController();
+    batchRef.current = ac;
+    setUploadFailures([]);
+    setUploadProgress({ total: 0, completed: 0, index: -1, fileName: null, fraction: 0 });
+
+    const result = await uploadAssetBatch({
+      files: Array.from(files).map((f) => ({ name: f.name, size: f.size, type: f.type })),
+      provider: controller.uploadProvider,
+      constraints: { accept: field.validation.accept, maxSizeBytes: field.validation.maxSizeBytes },
+      multiple: field.validation.multiple,
+      source,
+      // Read the live value so appends never clobber a concurrent change.
+      currentValue: controller.getFieldValue(path),
+      auth: controller.auth,
+      signal: ac.signal,
+      // Commit after EVERY success: a later failure keeps earlier assets.
+      commit: (v) => controller.setFieldValue(path, v),
+      onProgress: (p) => { if (mountedRef.current && batchRef.current === ac) setUploadProgress(p); },
+    });
+
+    if (batchRef.current !== ac) return; // superseded/cancelled
+    batchRef.current = null;
+    if (!mountedRef.current) return;
+    setUploadProgress(null);
+    setUploadFailures(result.failures);
+  }, [controller, field, path]);
+
+  const cancelUpload = useCallback(() => {
+    batchRef.current?.abort();
+    batchRef.current = null;
+    setUploadProgress(null);
+  }, []);
   if (!slice.visible || field.type === 'hidden') return null;
   const set = (v: unknown) => controller.setFieldValue(path, v);
   const common = ariaProps(field, path, slice);
@@ -154,17 +178,27 @@ function HtmlField({ controller, field, path, locale }: FieldCtx & { field: Norm
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => { e.preventDefault(); setDragOver(false); void uploadFiles(e.dataTransfer.files); }}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); void uploadFiles(e.dataTransfer.files, 'drag-drop'); }}
           style={{ border: `2px dashed ${dragOver ? '#1f6feb' : '#bbb'}`, borderRadius: 8, padding: 14, background: dragOver ? '#eaf2ff' : '#fafafa' }}
           data-testid={`dropzone-${path}`}
         >
-          <input ref={fileRef} {...common} type="file" accept={field.validation.accept?.join(',')} multiple={field.validation.multiple} style={{ display: 'none' }} onChange={(e) => e.target.files && void uploadFiles(e.target.files)} data-testid={`file-input-${path}`} />
+          <input ref={fileRef} {...common} type="file" accept={field.validation.accept?.join(',')} multiple={field.validation.multiple} style={{ display: 'none' }} onChange={(e) => { if (e.target.files) void uploadFiles(e.target.files, 'picker'); e.target.value = ''; }} data-testid={`file-input-${path}`} />
           <button type="button" style={btnSecondary} onClick={() => fileRef.current?.click()} disabled={slice.disabled || slice.readonly || uploadProgress !== null} data-testid={`pick-${path}`}>
-            {uploadProgress !== null ? `Uploading… ${Math.round(uploadProgress * 100)}%` : 'Choose file'}
+            {uploadProgress !== null
+              ? `Uploading${uploadProgress.fileName ? ` ${uploadProgress.fileName}` : ''}… ${Math.round(uploadProgress.fraction * 100)}% (${Math.min(uploadProgress.completed + 1, Math.max(uploadProgress.total, 1))}/${Math.max(uploadProgress.total, 1)})`
+              : 'Choose file'}
           </button>
-          <span style={{ marginLeft: 10, color: '#666', fontSize: 13 }}>or drag &amp; drop</span>
+          {uploadProgress !== null ? (
+            <button type="button" style={{ ...btnSecondary, marginLeft: 8 }} onClick={cancelUpload} data-testid={`cancel-upload-${path}`}>Cancel</button>
+          ) : (
+            <span style={{ marginLeft: 10, color: '#666', fontSize: 13 }}>or drag &amp; drop</span>
+          )}
           {names ? <p style={helpStyle} data-testid={`asset-${path}`}>{names} ✓ uploaded</p> : null}
-          {uploadError ? <p role="alert" style={errorStyle} data-testid={`upload-error-${path}`}>{uploadError}</p> : null}
+          {uploadFailures.map((f, i) => (
+            <p key={`${f.name}-${i}`} role="alert" style={errorStyle} data-testid={`upload-error-${path}`} data-upload-code={f.code}>
+              {f.name ? `${f.name}: ` : ''}{f.message} [{f.code}]
+            </p>
+          ))}
         </div>
       );
       break;

@@ -11,6 +11,27 @@ source of authorization: any body that contains an ``auth`` key is rejected with
 400 AUTH_IN_BODY_FORBIDDEN. Unauthenticated requests carry ``auth=None`` and the
 handler's fail-closed RBAC denies any permission-gated form.
 
+SECURITY (CSRF, Phase 1): this view is **CSRF-protected by default**. It is wrapped
+in ``csrf_protect``, which enforces Django's CSRF checks even if the host forgot to
+install ``CsrfViewMiddleware``. Because identity may come from ``request.user``
+(a cookie/session principal), an unprotected endpoint would accept cross-site
+forged submissions; unconditional ``csrf_exempt`` was therefore removed.
+
+Browser/session hosts must send a valid CSRF token (``X-CSRFToken`` header or the
+``csrfmiddlewaretoken`` form field) exactly as for any other Django POST.
+
+Non-cookie token hosts (e.g. ``Authorization: Bearer``) may opt out **explicitly**
+with ``csrf_exempt_token_auth=True``. That is a host decision with hard conditions:
+
+1. An ``auth_resolver`` MUST be supplied (otherwise wiring raises ``ValueError``),
+   because with CSRF disabled the trusted resolver is the only identity source.
+2. Identity is then taken ONLY from the resolver — ``request.user`` is never
+   consulted on that route, so a session cookie can never grant authority there.
+3. If a request presents the Django session cookie but the resolver yields no
+   principal, the request is refused with 403 ``CSRF_SESSION_AUTH_FORBIDDEN``
+   rather than silently downgraded to anonymous. Mount such routes on a
+   token-only API surface, never on a cookie-authenticated browser surface.
+
 Example (host urls.py):
     from vds_form.submission import TrustedSubmissionHandler, OperationRegistry
     from vds_form.django_view import create_submission_view
@@ -69,6 +90,8 @@ def create_submission_view(
     handler: TrustedSubmissionHandler,
     auth_resolver: Optional[Callable[[Any], Optional[Dict[str, Any]]]] = None,
     allow_anonymous: bool = True,
+    *,
+    csrf_exempt_token_auth: bool = False,
 ) -> Callable:
     """Return a Django view that delegates to the trusted handler (POST, JSON).
 
@@ -76,11 +99,24 @@ def create_submission_view(
     auth context or None. If omitted, auth is derived from ``request.user``.
     ``allow_anonymous`` (default True) permits public forms; permission-gated
     forms are still denied anonymous by the handler's fail-closed RBAC.
-    """
-    from django.http import JsonResponse, HttpResponseNotAllowed
-    from django.views.decorators.csrf import csrf_exempt
 
-    @csrf_exempt
+    The view is CSRF-protected by default. ``csrf_exempt_token_auth=True`` is an
+    explicit host opt-out for non-cookie token authentication only; it requires an
+    ``auth_resolver`` and disables session-derived identity on that route. See the
+    module docstring for the full conditions.
+    """
+    from django.conf import settings as dj_settings
+    from django.http import JsonResponse, HttpResponseNotAllowed
+    from django.views.decorators.csrf import csrf_exempt, csrf_protect
+
+    if csrf_exempt_token_auth and auth_resolver is None:
+        # Fail loudly at wiring time: disabling CSRF without a trusted resolver
+        # would leave an endpoint with no identity source at all.
+        raise ValueError(
+            "csrf_exempt_token_auth=True requires an auth_resolver that reads verified "
+            "token claims. CSRF exemption is only safe on a non-cookie token surface."
+        )
+
     def view(request):
         if request.method != "POST":
             return HttpResponseNotAllowed(["POST"])
@@ -97,7 +133,19 @@ def create_submission_view(
                                  "message": "Authorization must not be supplied in the request body."}, status=400)
 
         # Derive auth exclusively from the server-side principal / verified claims.
-        auth = auth_resolver(request) if auth_resolver is not None else _auth_from_user(getattr(request, "user", None))
+        if csrf_exempt_token_auth:
+            # CSRF is off on this route, so the trusted resolver is the ONLY identity
+            # source. Never fall back to the cookie/session principal here.
+            auth = auth_resolver(request)
+            if auth is None and request.COOKIES.get(dj_settings.SESSION_COOKIE_NAME):
+                return JsonResponse(
+                    {"status": "permission-denied", "code": "CSRF_SESSION_AUTH_FORBIDDEN",
+                     "message": "This endpoint is token-only. Session-cookie authentication is not "
+                                "accepted on a CSRF-exempt route; use the CSRF-protected endpoint."},
+                    status=403,
+                )
+        else:
+            auth = auth_resolver(request) if auth_resolver is not None else _auth_from_user(getattr(request, "user", None))
         if auth is None and not allow_anonymous:
             return JsonResponse({"status": "permission-denied", "code": "AUTH_REQUIRED",
                                  "message": "Authentication is required to submit this form."}, status=401)
@@ -112,4 +160,5 @@ def create_submission_view(
         }, auth)
         return JsonResponse(result, status=_STATUS_CODE.get(result["status"], 200))
 
-    return view
+    # Default: enforce CSRF even when the host omitted CsrfViewMiddleware.
+    return csrf_exempt(view) if csrf_exempt_token_auth else csrf_protect(view)

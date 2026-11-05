@@ -1006,3 +1006,10 @@ export class FormController {
 export function createFormController(options: RuntimeOptions): FormController {
   return new FormController(options);
 }
+
+// Shared upload-batch semantics used by every UI renderer (partial-success safe).
+export {
+  uploadAssetBatch, mimeAllowed,
+  type UploadBatchOptions, type UploadBatchResult, type UploadCandidate,
+  type UploadFailure, type UploadProgress, type UploadSource,
+} from './uploads';

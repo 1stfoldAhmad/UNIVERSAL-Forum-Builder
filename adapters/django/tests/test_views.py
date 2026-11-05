@@ -39,6 +39,20 @@ def setup(perms=("customer:create",)):
     return view, records
 
 
+def csrf(request):
+    """Attach a valid CSRF cookie+header (the view is CSRF-protected by default).
+
+    Uses only public Django API so it works across the supported Django matrix.
+    """
+    from django.conf import settings as dj_settings
+    from django.middleware.csrf import get_token
+
+    token = get_token(request)
+    request.COOKIES[dj_settings.CSRF_COOKIE_NAME] = request.META["CSRF_COOKIE"]
+    request.META[dj_settings.CSRF_HEADER_NAME] = token
+    return request
+
+
 VALID = {"customer": {"name": "Ada Lovelace", "email": "ada@example.com", "type": "individual", "consent": True}}
 
 
@@ -54,7 +68,7 @@ def test_get_renders_page():
 
 def test_post_json_success():
     view, records = setup()
-    req = RequestFactory().post("/forms/customer-registration?format=json", data=json.dumps({"values": VALID, "idempotencyKey": "k1"}), content_type="application/json")
+    req = csrf(RequestFactory().post("/forms/customer-registration?format=json", data=json.dumps({"values": VALID, "idempotencyKey": "k1"}), content_type="application/json"))
     req.perms = ["customer:create"]
     res = view(req, form_id="customer-registration")
     assert res.status_code == 200
@@ -64,7 +78,7 @@ def test_post_json_success():
 
 def test_post_form_validation_errors():
     view, records = setup()
-    req = RequestFactory().post("/forms/customer-registration", data={"customer.name": "Ada"})
+    req = csrf(RequestFactory().post("/forms/customer-registration", data={"customer.name": "Ada"}))
     req.perms = ["customer:create"]
     res = view(req, form_id="customer-registration")
     assert res.status_code == 422
@@ -74,7 +88,7 @@ def test_post_form_validation_errors():
 
 def test_post_permission_denied():
     view, records = setup()
-    req = RequestFactory().post("/forms/customer-registration?format=json", data=json.dumps({"values": VALID, "idempotencyKey": "k2"}), content_type="application/json")
+    req = csrf(RequestFactory().post("/forms/customer-registration?format=json", data=json.dumps({"values": VALID, "idempotencyKey": "k2"}), content_type="application/json"))
     req.perms = []
     res = view(req, form_id="customer-registration")
     assert res.status_code == 403
@@ -83,9 +97,34 @@ def test_post_permission_denied():
 
 def test_auth_in_body_rejected():
     view, records = setup()
-    req = RequestFactory().post("/forms/customer-registration?format=json", data=json.dumps({"values": VALID, "auth": {"permissions": ["*"]}}), content_type="application/json")
+    req = csrf(RequestFactory().post("/forms/customer-registration?format=json", data=json.dumps({"values": VALID, "auth": {"permissions": ["*"]}}), content_type="application/json"))
     req.perms = []
     res = view(req, form_id="customer-registration")
     assert res.status_code == 400
     assert json.loads(res.content)["code"] == "AUTH_IN_BODY_FORBIDDEN"
     assert len(records) == 0
+
+
+def test_post_without_csrf_token_is_rejected():
+    """Phase 1 regression: the rendered CSRF token must actually be verified."""
+    view, records = setup()
+    req = RequestFactory().post(
+        "/forms/customer-registration?format=json",
+        data=json.dumps({"values": VALID, "idempotencyKey": "k-no-csrf"}),
+        content_type="application/json",
+    )
+    req.perms = ["customer:create"]
+    res = view(req, form_id="customer-registration")
+    assert res.status_code == 403
+    assert records == []  # the trusted operation never ran
+
+
+def test_csrf_exempt_token_auth_requires_resolver():
+    from vds_form_renderer.views import create_form_view as cfv
+
+    ir = load("customer-registration")
+    ops = OperationRegistry()
+    ops.register("test:customer.create", lambda p, c: {"id": "C1"})
+    handler = TrustedSubmissionHandler(forms={"customer-registration": ir}, operations=ops)
+    with pytest.raises(ValueError, match="auth_resolver"):
+        cfv(handler, {"customer-registration": ir}, csrf_exempt_token_auth=True)
