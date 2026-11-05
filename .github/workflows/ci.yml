@@ -174,9 +174,20 @@ jobs:
       - name: Diagnose official Dart formatter output (temporary)
         run: |
           cd adapters/flutter
-          dart format lib/src/controller.dart
-          encoded=$(base64 -w0 lib/src/controller.dart)
-          echo "::notice file=adapters/flutter/lib/src/controller.dart,line=1::DART_FORMATTED_CONTROLLER_BASE64:$encoded"
+          emit_formatted() {
+            file="$1"
+            dart format "$file"
+            encoded=$(base64 -w0 "$file")
+            chunk=0
+            while [ -n "$encoded" ]; do
+              part=${encoded:0:3000}
+              echo "::notice file=$file,line=1::DARTFMT:$file:$chunk:$part"
+              encoded=${encoded:3000}
+              chunk=$((chunk + 1))
+            done
+          }
+          emit_formatted lib/src/controller.dart
+          emit_formatted test/controller_test.dart
       - name: Dart format check — capabilities
         run: cd adapters/flutter && dart format --set-exit-if-changed lib/src/capabilities.dart
       - name: Dart format check — controller
