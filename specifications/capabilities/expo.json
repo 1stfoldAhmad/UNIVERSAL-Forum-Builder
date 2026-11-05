@@ -1,0 +1,564 @@
+{
+  "target": "expo",
+  "contractVersion": "1.0.0",
+  "fieldTypes": {
+    "text": {
+      "fieldType": "text",
+      "contractVersion": "1.0.0",
+      "valueType": "string",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "textarea": {
+      "fieldType": "textarea",
+      "contractVersion": "1.0.0",
+      "valueType": "string",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "email": {
+      "fieldType": "email",
+      "contractVersion": "1.0.0",
+      "valueType": "string",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "password": {
+      "fieldType": "password",
+      "contractVersion": "1.0.0",
+      "valueType": "string",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "url": {
+      "fieldType": "url",
+      "contractVersion": "1.0.0",
+      "valueType": "string",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "phone": {
+      "fieldType": "phone",
+      "contractVersion": "1.0.0",
+      "valueType": "string",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "integer": {
+      "fieldType": "integer",
+      "contractVersion": "1.0.0",
+      "valueType": "integer",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "decimal": {
+      "fieldType": "decimal",
+      "contractVersion": "1.0.0",
+      "valueType": "number",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "currency": {
+      "fieldType": "currency",
+      "contractVersion": "1.0.0",
+      "valueType": "number",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "percentage": {
+      "fieldType": "percentage",
+      "contractVersion": "1.0.0",
+      "valueType": "number",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "range": {
+      "fieldType": "range",
+      "contractVersion": "1.0.0",
+      "valueType": "number",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false,
+      "fallbackStrategy": "numeric-stepper"
+    },
+    "select": {
+      "fieldType": "select",
+      "contractVersion": "1.0.0",
+      "valueType": "string",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": true,
+      "requiresNativeModule": false
+    },
+    "multiselect": {
+      "fieldType": "multiselect",
+      "contractVersion": "1.0.0",
+      "valueType": "string[]",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": true,
+      "requiresNativeModule": false
+    },
+    "radio": {
+      "fieldType": "radio",
+      "contractVersion": "1.0.0",
+      "valueType": "string",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "checkbox": {
+      "fieldType": "checkbox",
+      "contractVersion": "1.0.0",
+      "valueType": "boolean",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "switch": {
+      "fieldType": "switch",
+      "contractVersion": "1.0.0",
+      "valueType": "boolean",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "consent": {
+      "fieldType": "consent",
+      "contractVersion": "1.0.0",
+      "valueType": "boolean",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "date": {
+      "fieldType": "date",
+      "contractVersion": "1.0.0",
+      "valueType": "string",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false,
+      "fallbackStrategy": "iso-text-input"
+    },
+    "time": {
+      "fieldType": "time",
+      "contractVersion": "1.0.0",
+      "valueType": "string",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false,
+      "fallbackStrategy": "iso-text-input"
+    },
+    "datetime": {
+      "fieldType": "datetime",
+      "contractVersion": "1.0.0",
+      "valueType": "string",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false,
+      "fallbackStrategy": "iso-text-input"
+    },
+    "duration": {
+      "fieldType": "duration",
+      "contractVersion": "1.0.0",
+      "valueType": "number",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "rating": {
+      "fieldType": "rating",
+      "contractVersion": "1.0.0",
+      "valueType": "integer",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "color": {
+      "fieldType": "color",
+      "contractVersion": "1.0.0",
+      "valueType": "string",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "barcode": {
+      "fieldType": "barcode",
+      "contractVersion": "1.0.0",
+      "valueType": "string",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "file": {
+      "fieldType": "file",
+      "contractVersion": "1.0.0",
+      "valueType": "asset",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": true,
+      "fallbackStrategy": "file-picker"
+    },
+    "image": {
+      "fieldType": "image",
+      "contractVersion": "1.0.0",
+      "valueType": "asset",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": true,
+      "fallbackStrategy": "image-picker"
+    },
+    "computed": {
+      "fieldType": "computed",
+      "contractVersion": "1.0.0",
+      "valueType": "number",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "hidden": {
+      "fieldType": "hidden",
+      "contractVersion": "1.0.0",
+      "valueType": "string",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "group": {
+      "fieldType": "group",
+      "contractVersion": "1.0.0",
+      "valueType": "object",
+      "supportsValidation": false,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    },
+    "repeater": {
+      "fieldType": "repeater",
+      "contractVersion": "1.0.0",
+      "valueType": "object[]",
+      "supportsValidation": true,
+      "supportsAsyncValidation": true,
+      "supportsAccessibility": true,
+      "supportsLocalization": true,
+      "supportsReadonly": true,
+      "supportsDisabled": true,
+      "supportsDynamicOptions": false,
+      "requiresNativeModule": false
+    }
+  },
+  "features": {
+    "dragDrop": false,
+    "camera": false,
+    "filePicker": false,
+    "offlineQueue": false,
+    "draftPersistence": false,
+    "multiStep": true,
+    "repeaters": true,
+    "richText": false,
+    "signature": false
+  },
+  "featureStatus": {
+    "multiStep": {
+      "status": "supported"
+    },
+    "repeaters": {
+      "status": "supported"
+    },
+    "localization": {
+      "status": "supported"
+    },
+    "accessibility": {
+      "status": "supported"
+    },
+    "uploadProgress": {
+      "status": "supported"
+    },
+    "uploadCancel": {
+      "status": "supported"
+    },
+    "filePicker": {
+      "status": "requires-host-adapter",
+      "requires": [
+        "ExpoPickerAdapters.pickDocument",
+        "ExpoPickerAdapters.pickImage"
+      ],
+      "reason": "No picker injected: file controls are disabled."
+    },
+    "camera": {
+      "status": "requires-host-adapter",
+      "requires": [
+        "ExpoPickerAdapters.captureCamera"
+      ],
+      "reason": "No camera adapter injected."
+    },
+    "draftPersistence": {
+      "status": "requires-host-adapter",
+      "requires": [
+        "DraftStorageAdapter"
+      ],
+      "reason": "Implemented in the shared runtime; durable storage must be injected."
+    },
+    "offlineQueue": {
+      "status": "requires-host-adapter",
+      "requires": [
+        "OfflineQueueAdapter"
+      ],
+      "reason": "Implemented in the shared runtime; a queue adapter must be injected."
+    },
+    "dragDrop": {
+      "status": "unsupported",
+      "reason": "React Native has no drag-and-drop source."
+    },
+    "richText": {
+      "status": "unsupported",
+      "reason": "No rich-text editor is implemented."
+    },
+    "signature": {
+      "status": "unsupported",
+      "reason": "No signature pad is implemented."
+    }
+  },
+  "fieldStatus": {
+    "signature": {
+      "status": "unsupported",
+      "reason": "No signature pad is implemented."
+    },
+    "date": {
+      "status": "partial",
+      "reason": "ISO text input; no native date picker is bundled."
+    },
+    "time": {
+      "status": "partial",
+      "reason": "ISO text input; no native time picker is bundled."
+    },
+    "datetime": {
+      "status": "partial",
+      "reason": "ISO text input; no native datetime picker is bundled."
+    },
+    "barcode": {
+      "status": "requires-host-adapter",
+      "requires": [
+        "host scanner"
+      ],
+      "reason": "Manual entry works; scanning needs a host adapter."
+    },
+    "file": {
+      "status": "requires-host-adapter",
+      "requires": [
+        "ExpoPickerAdapters.pickDocument",
+        "ExpoPickerAdapters.pickImage"
+      ],
+      "reason": "No picker injected: file controls are disabled."
+    },
+    "image": {
+      "status": "requires-host-adapter",
+      "requires": [
+        "ExpoPickerAdapters.pickDocument",
+        "ExpoPickerAdapters.pickImage"
+      ],
+      "reason": "No picker injected: file controls are disabled."
+    }
+  },
+  "layoutStatus": {
+    "section": {
+      "status": "supported"
+    },
+    "group": {
+      "status": "supported"
+    },
+    "row": {
+      "status": "supported"
+    },
+    "columns": {
+      "status": "supported"
+    },
+    "tabs": {
+      "status": "supported"
+    },
+    "tab": {
+      "status": "supported"
+    },
+    "accordion": {
+      "status": "supported"
+    },
+    "steps": {
+      "status": "supported"
+    },
+    "step": {
+      "status": "supported"
+    },
+    "fieldset": {
+      "status": "supported"
+    },
+    "summary": {
+      "status": "supported"
+    },
+    "repeater": {
+      "status": "supported"
+    },
+    "divider": {
+      "status": "supported"
+    },
+    "text": {
+      "status": "supported"
+    }
+  },
+  "evidence": {
+    "unit": "npm run test:native (vitest)",
+    "ci": ".github/workflows/ci.yml job: typescript",
+    "device": "pending — no physical-device verification performed"
+  }
+}

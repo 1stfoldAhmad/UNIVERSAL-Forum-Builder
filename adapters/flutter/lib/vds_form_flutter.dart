@@ -6,6 +6,7 @@
 /// locally). Verified against the shared cross-language conformance fixtures.
 library vds_form_flutter;
 
+export 'src/assets.dart';
 export 'src/expr.dart';
 export 'src/validation.dart';
 export 'src/controller.dart';

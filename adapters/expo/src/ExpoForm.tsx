@@ -25,6 +25,9 @@ export function ExpoForm({ controller, pickers, locale, onSubmitted, submitLabel
     focusRegistry.current.set(path, focus);
   }, []);
   const [stepIndex, setStepIndex] = useState(0);
+  // Layout state for tabs / accordion (canonical layout nodes).
+  const [tabIndex, setTabIndex] = useState<Record<string, number>>({});
+  const [openPanels, setOpenPanels] = useState<Record<string, boolean>>({});
   const [submitting, setSubmitting] = useState(false);
   const [advancing, setAdvancing] = useState(false);
 
@@ -119,7 +122,7 @@ export function ExpoForm({ controller, pickers, locale, onSubmitted, submitLabel
           </View>
         );
       }
-      case 'section': case 'group': case 'fieldset': case 'row': case 'columns': case 'tab': case 'accordion':
+      case 'section': case 'group': case 'tab':
         return (
           <View key={key} style={{ marginBottom: 16 }} testID={node.id ? `layout-${node.id}` : undefined}>
             {title ? <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 10 }} accessibilityRole="header">{title}</Text> : null}
@@ -127,8 +130,83 @@ export function ExpoForm({ controller, pickers, locale, onSubmitted, submitLabel
             {(node.children ?? []).map((c, i) => renderLayout(c, `${key}-${i}`))}
           </View>
         );
-      case 'tabs':
-        return <View key={key}>{(node.children ?? []).map((c, i) => renderLayout(c, `${key}-${i}`))}</View>;
+      case 'row': case 'columns':
+        return (
+          <View key={key} style={{ marginBottom: 16 }} testID={node.id ? `layout-${node.id}` : undefined}>
+            {title ? <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 10 }} accessibilityRole="header">{title}</Text> : null}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {(node.fieldRefs ?? []).map((id) => {
+                const f = fieldById.get(id);
+                return f ? <View key={id} style={{ flex: 1 }}>{renderField(f, f.key)}</View> : null;
+              })}
+              {(node.children ?? []).map((c, i) => (
+                <View key={`${key}-${i}`} style={{ flex: 1 }}>{renderLayout(c, `${key}-${i}`)}</View>
+              ))}
+            </View>
+          </View>
+        );
+      case 'fieldset':
+        return (
+          <View
+            key={key}
+            style={{ marginBottom: 16, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 14 }}
+            testID={node.id ? `fieldset-${node.id}` : 'fieldset'}
+            accessibilityRole="group"
+          >
+            {title ? <Text style={{ fontSize: 16, fontWeight: '700', marginBottom: 8 }} accessibilityRole="header">{title}</Text> : null}
+            {fieldNodes}
+            {(node.children ?? []).map((c, i) => renderLayout(c, `${key}-${i}`))}
+          </View>
+        );
+      case 'accordion':
+        return (
+          <View key={key} testID={node.id ? `accordion-${node.id}` : 'accordion'}>
+            {(node.children ?? []).map((child, i) => {
+              const panelKey = `${key}-${child.id ?? i}`;
+              const open = openPanels[panelKey] ?? false;
+              return (
+                <View key={panelKey} style={{ borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 6, marginBottom: 6 }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: open }}
+                    testID={`accordion-toggle-${child.id ?? i}`}
+                    onPress={() => setOpenPanels((m) => ({ ...m, [panelKey]: !open }))}
+                    style={{ padding: 10, backgroundColor: '#fafafa' }}
+                  >
+                    <Text style={{ fontWeight: '600' }}>{child.title ? localize(child.title, loc) : `Section ${i + 1}`}</Text>
+                  </Pressable>
+                  {open ? <View style={{ padding: 12 }}>{renderLayout(child, `${panelKey}-body`)}</View> : null}
+                </View>
+              );
+            })}
+          </View>
+        );
+      case 'tabs': {
+        const tabs = node.children ?? [];
+        if (tabs.length === 0) return null;
+        const sel = Math.min(Math.max(tabIndex[key] ?? 0, 0), tabs.length - 1);
+        return (
+          <View key={key} testID={node.id ? `tabs-${node.id}` : 'tabs'}>
+            <ScrollView horizontal style={{ marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', gap: 4 }}>
+                {tabs.map((t, i) => (
+                  <Pressable
+                    key={t.id ?? i}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: i === sel }}
+                    testID={`tab-${node.id ?? key}-${i}`}
+                    onPress={() => setTabIndex((m) => ({ ...m, [key]: i }))}
+                    style={{ paddingVertical: 6, paddingHorizontal: 12, borderWidth: 1, borderColor: '#ccc', borderRadius: 6, backgroundColor: i === sel ? '#eef2ff' : '#fff' }}
+                  >
+                    <Text style={{ fontWeight: i === sel ? '700' : '400' }}>{t.title ? localize(t.title, loc) : `Tab ${i + 1}`}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </ScrollView>
+            <View>{renderLayout(tabs[sel], `${key}-${sel}`)}</View>
+          </View>
+        );
+      }
       case 'divider':
         return <View key={key} style={{ height: 1, backgroundColor: '#e0e0e0', marginVertical: 12 }} />;
       case 'text':
@@ -140,7 +218,14 @@ export function ExpoForm({ controller, pickers, locale, onSubmitted, submitLabel
         return f ? renderField(f, f.key) : null;
       }
       default:
-        return <View key={key}>{fieldNodes}</View>;
+        return (
+          <View key={key} testID={node.id ? `layout-${node.id}` : undefined}>
+            <Text testID={`unsupported-layout-${node.id ?? key}`} style={{ color: '#8d6e00' }}>
+              Unsupported layout node: {node.type}
+            </Text>
+            {fieldNodes}
+          </View>
+        );
     }
   };
 

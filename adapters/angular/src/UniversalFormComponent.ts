@@ -71,8 +71,57 @@ import { localize } from '@vds-form/validation';
       <ng-container *ngSwitchCase="'repeater'">
         <ng-container *ngTemplateOutlet="field; context: { $implicit: fieldById(node.repeaterRef), path: fieldById(node.repeaterRef)?.key }"></ng-container>
       </ng-container>
-      <section *ngSwitchDefault style="margin-bottom:16px;">
+      <div *ngSwitchCase="'tabs'" [attr.data-testid]="node.id ? 'tabs-' + node.id : 'tabs'">
+        <div role="tablist" style="display:flex;gap:4px;margin-bottom:10px;">
+          <button *ngFor="let t of node.children || []; let i = index" type="button" role="tab"
+                  [attr.aria-selected]="i === tabIndexFor(node)"
+                  [attr.data-testid]="'tab-' + (node.id || 'root') + '-' + i"
+                  (click)="selectTab(node, i)"
+                  [style.background]="i === tabIndexFor(node) ? '#eef2ff' : '#fff'"
+                  [style.font-weight]="i === tabIndexFor(node) ? 600 : 400"
+                  style="padding:6px 12px;border:1px solid #ccc;border-radius:6px;">
+            {{ t.title ? loc(t.title) : 'Tab ' + (i + 1) }}
+          </button>
+        </div>
+        <div role="tabpanel">
+          <ng-container *ngTemplateOutlet="nodes; context: { $implicit: [activeTab(node)] }"></ng-container>
+        </div>
+      </div>
+      <div *ngSwitchCase="'accordion'" [attr.data-testid]="node.id ? 'accordion-' + node.id : 'accordion'">
+        <div *ngFor="let child of node.children || []; let i = index" style="border:1px solid #e0e0e0;border-radius:6px;margin-bottom:6px;">
+          <button type="button" [attr.aria-expanded]="panelOpen(node, child, i)"
+                  [attr.data-testid]="'accordion-toggle-' + (child.id || i)"
+                  (click)="togglePanel(node, child, i)"
+                  style="width:100%;text-align:left;padding:8px 12px;background:#fafafa;border:none;cursor:pointer;">
+            {{ child.title ? loc(child.title) : 'Section ' + (i + 1) }}
+          </button>
+          <div *ngIf="panelOpen(node, child, i)" style="padding:12px;">
+            <ng-container *ngTemplateOutlet="nodes; context: { $implicit: [child] }"></ng-container>
+          </div>
+        </div>
+      </div>
+      <fieldset *ngSwitchCase="'fieldset'" [attr.data-testid]="node.id ? 'fieldset-' + node.id : 'fieldset'"
+                style="border:1px solid #ddd;border-radius:8px;padding:14px;margin-bottom:16px;">
+        <legend *ngIf="node.title">{{ loc(node.title) }}</legend>
+        <ng-container *ngFor="let ref of node.fieldRefs || []">
+          <ng-container *ngTemplateOutlet="field; context: { $implicit: fieldById(ref), path: fieldById(ref)?.key }"></ng-container>
+        </ng-container>
+        <ng-container *ngTemplateOutlet="nodes; context: { $implicit: node.children || [] }"></ng-container>
+      </fieldset>
+      <dl *ngSwitchCase="'summary'" [attr.data-testid]="node.id ? 'summary-' + node.id : 'summary'">
+        <div *ngFor="let f of summaryFieldsFor(node)" style="display:flex;justify-content:space-between;padding:4px 0;">
+          <dt style="color:#555;">{{ loc(f.label) }}</dt>
+          <dd style="margin:0;font-weight:600;" [attr.data-testid]="'summary-value-' + f.id">{{ displayValue(f.key) }}</dd>
+        </div>
+      </dl>
+      <section *ngSwitchDefault [attr.data-testid]="node.id ? 'layout-' + node.id : null" [style.margin-bottom.px]="16"
+               [style.display]="isRowNode(node) ? 'grid' : null"
+               [style.grid-template-columns]="isRowNode(node) ? gridColumns(node) : null"
+               [style.gap.px]="isRowNode(node) ? 12 : null">
         <h3 *ngIf="node.title" style="margin:0 0 10px;">{{ loc(node.title) }}</h3>
+        <p *ngIf="!isKnownLayout(node)" role="note" [attr.data-testid]="'unsupported-layout-' + (node.id || 'root')" style="color:#8d6e00;">
+          Unsupported layout node: {{ node.type }}
+        </p>
         <ng-container *ngFor="let ref of node.fieldRefs || []">
           <ng-container *ngTemplateOutlet="field; context: { $implicit: fieldById(ref), path: fieldById(ref)?.key }"></ng-container>
         </ng-container>
@@ -366,6 +415,49 @@ export class UniversalFormComponent implements OnChanges, OnDestroy {
     const walk = (n: LayoutNode): LayoutNode[] => n.type === 'steps' ? (n.children ?? []).filter((c) => c.type === 'step' || c.type === 'summary') : (n.children ?? []).flatMap(walk);
     return walk(this.controller.ir.layout);
   }
+  /** Layout state for tabs / accordion (canonical layout nodes). */
+  private tabSelection = signal<Record<string, number>>({});
+  private openPanels = signal<Record<string, boolean>>({});
+
+  private nodeKey(node: LayoutNode): string { return node.id ?? `${node.type}`; }
+  isRowNode(node: LayoutNode): boolean { return node.type === 'row' || node.type === 'columns'; }
+  isKnownLayout(node: LayoutNode): boolean {
+    return ['section', 'group', 'step', 'tab', 'row', 'columns'].includes(node.type);
+  }
+  gridColumns(node: LayoutNode): string {
+    const n = Math.max(1, (node.fieldRefs?.length ?? 0) + (node.children?.length ?? 0));
+    return `repeat(${n},1fr)`;
+  }
+  tabIndexFor(node: LayoutNode): number {
+    const tabs = node.children ?? [];
+    return Math.min(Math.max(this.tabSelection()[this.nodeKey(node)] ?? 0, 0), Math.max(0, tabs.length - 1));
+  }
+  activeTab(node: LayoutNode): LayoutNode {
+    const tabs = node.children ?? [];
+    return tabs[this.tabIndexFor(node)] ?? { type: 'section' };
+  }
+  selectTab(node: LayoutNode, i: number): void {
+    this.tabSelection.set({ ...this.tabSelection(), [this.nodeKey(node)]: i });
+  }
+  private panelKey(node: LayoutNode, child: LayoutNode, i: number): string {
+    return `${this.nodeKey(node)}-${child.id ?? i}`;
+  }
+  panelOpen(node: LayoutNode, child: LayoutNode, i: number): boolean {
+    return this.openPanels()[this.panelKey(node, child, i)] ?? false;
+  }
+  togglePanel(node: LayoutNode, child: LayoutNode, i: number): void {
+    const k = this.panelKey(node, child, i);
+    this.openPanels.set({ ...this.openPanels(), [k]: !this.panelOpen(node, child, i) });
+  }
+  summaryFieldsFor(node: LayoutNode): NormalizedField[] {
+    const ids = node.fieldRefs ?? [];
+    const snap = this.snap();
+    const list = ids.length
+      ? ids.map((id) => this.fieldById(id)).filter((f): f is NormalizedField => !!f)
+      : this.controller.ir.fields.filter((f) => !f.parentId && !['group', 'repeater'].includes(f.type));
+    return list.filter((f) => (snap?.visibility[f.id] ?? true) && f.type !== 'hidden');
+  }
+
   currentStep(): LayoutNode | undefined { const s = this.steps(); return s[Math.min(this.stepIndex(), s.length - 1)]; }
   isLastStep(): boolean { return this.stepIndex() >= this.steps().length - 1; }
   stepTitle(): string { const c = this.currentStep(); return c?.title ? this.loc(c.title) : `Step ${this.stepIndex() + 1}`; }

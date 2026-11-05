@@ -5,15 +5,27 @@ on:
     branches: ['**']
   pull_request:
 
+# Every job fails on a real failure. There are no `|| true` guards and no
+# silently skipped targets: a step either passes, fails visibly, or is an
+# explicitly named blocker with a reason.
+#
+# ORDERING RULE: `npm run setup:vds` MUST run before `npm ci`. The vendored
+# @vds-form/vds-logic engine is a `file:` workspace dependency; installing first
+# creates an empty vendor node_modules and breaks typecheck/tests.
+
 jobs:
   typescript:
-    name: TypeScript core + renderers + tools
+    name: TypeScript (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24', '26']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
           cache: npm
       - name: Fetch + build vendored VDS logic engine
         run: npm run setup:vds
@@ -25,6 +37,12 @@ jobs:
         run: npx vitest run
       - name: Cross-language conformance (CLI)
         run: npx tsx tools/cli/src/bin.ts conformance
+      - name: Capability mirrors are up to date
+        run: npm run capabilities:check
+      - name: Generated support matrix is up to date
+        run: npm run support-matrix:check
+      - name: Real node:sqlite durable-store APIs (requires Node >= 22.5)
+        run: npx vitest run --project core packages/form-persistence execution-adapters/node
       - name: Build live-preview example
         run: cd examples/react-app && npx vite build
       - name: Benchmarks (smoke)
@@ -36,43 +54,91 @@ jobs:
       - name: Fresh external-project package smoke test
         run: npm run test:packages
 
-  django:
-    name: Django/Python trusted adapter
+  nextjs:
+    name: Next.js App Router example (SSR + hydration)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22'
+          cache: npm
+      - name: Fetch + build vendored VDS logic engine
+        run: npm run setup:vds
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build packages (the example consumes built output)
+        run: npm run build:packages
+      - name: Next.js production build
+        run: npm run build --workspace @vds-form/example-next-app
+      - name: SSR / hydration / trusted-submission tests
+        run: npx vitest run --project nextjs
+
+  django:
+    name: Django ${{ matrix.django }} / Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Deliberate, documented matrix. Verified against PyPI metadata:
+        #   Django 5.2.x (LTS) requires Python >= 3.10
+        #   Django 6.1.x       requires Python >= 3.12
+        include:
+          - { django: '5.2.19', python: '3.10' }
+          - { django: '5.2.19', python: '3.11' }
+          - { django: '5.2.19', python: '3.12' }
+          - { django: '5.2.19', python: '3.13' }
+          - { django: '5.2.19', python: '3.14' }
+          - { django: '6.1.3', python: '3.12' }
+          - { django: '6.1.3', python: '3.13' }
+          - { django: '6.1.3', python: '3.14' }
+          - { django: '6.1.3', python: '3.15' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
           cache: npm
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python }}
+      - name: Fetch + build vendored VDS logic engine
+        run: npm run setup:vds
       - name: Install TS deps (to generate shared IR fixtures)
         run: npm ci --no-audit --no-fund
       - name: Generate compiled IR fixtures from the TS compiler
         run: npx tsx execution-adapters/django/scripts/gen_ir_fixtures.ts
-      - name: Install Python test deps
-        run: python3 -m pip install pytest django
-      - name: Run Django adapter tests (shared conformance + trusted handler + view)
+      - name: Install Python test deps (pinned Django from the matrix)
+        run: python3 -m pip install pytest "Django==${{ matrix.django }}"
+      - name: Report the real runtime versions
+        run: python3 -c "import sys, django; print('Python', sys.version); print('Django', django.get_version())"
+      - name: Execution adapter tests (conformance + trusted handler + CSRF/session/RBAC/tenant/idempotency)
         run: cd execution-adapters/django && python3 -m pytest -q
-      - name: Run Django renderer tests (SSR + trusted view)
+      - name: Renderer tests (SSR + trusted view + CSRF)
         run: cd adapters/django && python3 -m pytest -q
+      - name: Deprecation warnings are errors (future-version readiness)
+        run: cd execution-adapters/django && python3 -m pytest -q -W error::DeprecationWarning
 
   laravel:
-    name: Laravel/PHP trusted adapter (full verification)
+    name: PHP ${{ matrix.php }} trusted adapter
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.4', '8.5']
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: ${{ matrix.php }}
           extensions: mbstring, pdo_sqlite
           coverage: none
           tools: composer:v2
+      - name: Validate composer manifest
+        run: cd execution-adapters/laravel && composer validate --strict --no-check-publish
       - name: Install Composer dev deps (illuminate/http for the real-Request integration check)
         run: cd execution-adapters/laravel && composer update --no-interaction --prefer-dist --no-progress
-      - name: Run all PHP suites (expression + form conformance, idempotency parity, trusted handler, controller, security)
+      - name: Run all PHP suites (expression + form + asset conformance, idempotency, handler, controller, security)
         env:
           VDS_REQUIRE_ILLUMINATE: '1'   # fail if the real-Request integration would be skipped
           VDS_REQUIRE_PDO_SQLITE: '1'   # fail if the durable-restart check would be skipped
@@ -81,19 +147,25 @@ jobs:
         run: php adapters/laravel/tests/run-renderer.php
 
   laravel13:
-    name: Laravel 13 renderer integration (real PHP 8.3 + Illuminate)
+    name: Laravel 13 full HTTP lifecycle (PHP ${{ matrix.php }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.4', '8.5']
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: ${{ matrix.php }}
           extensions: mbstring, pdo_sqlite, ctype, filter, hash, openssl, session, tokenizer
           coverage: none
           tools: composer:v2
-      - name: Install Laravel 13 + path-linked execution adapter
+      - name: Validate composer manifest
+        run: cd adapters/laravel && composer validate --strict --no-check-publish
+      - name: Fresh consumer install (Laravel 13 + path-linked execution adapter)
         run: cd adapters/laravel && composer update --no-interaction --prefer-dist --no-progress
-      - name: Run real Laravel 13 integration check
+      - name: Run the real Laravel 13 HTTP integration suite
         run: |
           cd adapters/laravel
           set +e
@@ -104,7 +176,7 @@ jobs:
           exit $code
 
   flutter:
-    name: Flutter renderer (Dart conformance + controller + widgets)
+    name: Flutter renderer (analyze + format + tests)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -112,11 +184,37 @@ jobs:
         with:
           channel: stable
           cache: true
-      - name: Flutter test (62-case expression conformance + controller + widget)
-        run: cd adapters/flutter && flutter test
+      - name: Resolve Dart dependencies
+        run: cd adapters/flutter && flutter pub get
+      - name: Static analysis
+        run: cd adapters/flutter && flutter analyze
+      - name: Formatting is canonical
+        run: |
+          cd adapters/flutter
+          set +e
+          dart format --output=none --set-exit-if-changed . > /tmp/fmt.log 2>&1
+          code=$?
+          cat /tmp/fmt.log
+          if [ $code -ne 0 ]; then
+            # Surface the exact diff as annotations so the failure is actionable.
+            dart format --output=show . > /tmp/fmt-show.log 2>&1
+            grep -E '^Changed|^Formatted' /tmp/fmt.log | head -30 | sed 's/^/::error::/'
+          fi
+          exit $code
+      - name: Flutter tests (shared conformance + controller + uploads + widgets)
+        run: |
+          cd adapters/flutter
+          set +e
+          flutter test > /tmp/flutter.log 2>&1
+          code=$?
+          tail -120 /tmp/flutter.log
+          if [ $code -ne 0 ]; then grep -E 'Error|error:|Expected|Actual|FAILED|Failed|Exception' /tmp/flutter.log | head -45 | sed 's/^/::error::/'; fi
+          exit $code
+      - name: Publish dry-run (packaging validation, never publishes)
+        run: cd adapters/flutter && flutter pub publish --dry-run
 
   compose:
-    name: Compose renderer (Kotlin conformance + controller + UI compile)
+    name: Compose renderer (core tests + UI compile + UI tests)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -131,14 +229,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - name: Core tests (62-case expression conformance + controller)
+      - name: Core tests (shared conformance + controller + uploads + submission guard)
         run: |
           cd adapters/compose
           set +e
           gradle :core:test --no-daemon --console=plain > /tmp/core.log 2>&1
           code=$?
           tail -80 /tmp/core.log
-          if [ $code -ne 0 ]; then grep -E '^e: |error:|FAILURE|What went wrong|Execution failed|Caused by|Could not|FAILED|Unresolved|not found|Exception' /tmp/core.log | head -45 | sed 's/^/::error::/'; fi
+          if [ $code -ne 0 ]; then grep -E '^e: |error:|FAILURE|What went wrong|Execution failed|Caused by|Could not|FAILED|Unresolved|not found|Exception|expected' /tmp/core.log | head -45 | sed 's/^/::error::/'; fi
           exit $code
       - name: Compose UI compile evidence
         run: |
@@ -149,20 +247,75 @@ jobs:
           tail -80 /tmp/ui.log
           if [ $code -ne 0 ]; then grep -E '^e: |error:|FAILURE|What went wrong|Execution failed|Caused by|Could not|FAILED|Unresolved|not found|Exception' /tmp/ui.log | head -45 | sed 's/^/::error::/'; fi
           exit $code
+      - name: Compose UI + accessibility tests (Robolectric, real controls)
+        run: |
+          cd adapters/compose
+          set +e
+          gradle :ui:testDebugUnitTest --no-daemon --console=plain > /tmp/uitest.log 2>&1
+          code=$?
+          tail -100 /tmp/uitest.log
+          if [ $code -ne 0 ]; then grep -E '^e: |error:|FAILURE|What went wrong|Execution failed|Caused by|Could not|FAILED|Unresolved|not found|Exception|expected' /tmp/uitest.log | head -45 | sed 's/^/::error::/'; fi
+          exit $code
+      - name: Build the publishable AAR (local artifact, never published)
+        run: |
+          cd adapters/compose
+          set +e
+          gradle :core:jar :ui:assembleRelease --no-daemon --console=plain > /tmp/artifact.log 2>&1
+          code=$?
+          tail -40 /tmp/artifact.log
+          if [ $code -ne 0 ]; then grep -E '^e: |error:|FAILURE|What went wrong|Execution failed|Could not|Unresolved' /tmp/artifact.log | head -30 | sed 's/^/::error::/'; fi
+          exit $code
+      - name: Record artifact evidence
+        run: find adapters/compose -name '*.aar' -o -name 'core.jar' | tee compose-artifacts.txt
 
   swiftui:
-    name: SwiftUI renderer (Swift conformance + controller + UI build)
+    name: SwiftUI renderer (tests + UI target build)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - name: Swift version
         run: swift --version
-      - name: Swift test (62-case expression conformance + controller; builds VdsFormUI)
+      - name: Swift tests (shared conformance + controller + uploads + submission guard + capabilities)
         run: |
           cd adapters/swiftui
           set +e
           swift test > /tmp/swift.log 2>&1
           code=$?
-          tail -80 /tmp/swift.log
-          if [ $code -ne 0 ]; then grep -E 'error:|failed|XCTAssert|Fatal' /tmp/swift.log | head -45 | sed 's/^/::error::/'; fi
+          tail -120 /tmp/swift.log
+          if [ $code -ne 0 ]; then grep -E 'error:|failed|XCTAssert|Fatal|warning: .*deprecat' /tmp/swift.log | head -45 | sed 's/^/::error::/'; fi
           exit $code
+      - name: Build the SwiftUI UI target explicitly
+        run: |
+          cd adapters/swiftui
+          set +e
+          swift build --target VdsFormUI > /tmp/swiftui.log 2>&1
+          code=$?
+          tail -60 /tmp/swiftui.log
+          if [ $code -ne 0 ]; then grep -E 'error:|failed' /tmp/swiftui.log | head -45 | sed 's/^/::error::/'; fi
+          exit $code
+      - name: SwiftPM package validation
+        run: cd adapters/swiftui && swift package describe --type json > /dev/null
+
+  packaging:
+    name: Python packaging (wheel build + fresh install)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ['execution-adapters/django', 'adapters/django']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build wheel + sdist
+        run: |
+          python3 -m pip install --upgrade build
+          cd ${{ matrix.package }} && python3 -m build
+      - name: Fresh virtualenv install of the built wheel
+        run: |
+          python3 -m venv /tmp/fresh
+          /tmp/fresh/bin/pip install ${{ matrix.package }}/dist/*.whl
+          /tmp/fresh/bin/python -c "import importlib,sys; m=importlib.import_module('vds_form' if 'execution-adapters' in '${{ matrix.package }}' else 'vds_form_renderer'); print('imported', m.__name__)"
+      - name: Installed distribution exposes its declared dependencies
+        run: /tmp/fresh/bin/pip show $( [ "${{ matrix.package }}" = "execution-adapters/django" ] && echo vds-form-django || echo vds-form-renderer-django )

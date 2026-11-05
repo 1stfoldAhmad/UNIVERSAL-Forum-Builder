@@ -1,13 +1,13 @@
 {
     "name": "vds/form-laravel",
-    "description": "VDS Universal Form Builder — Laravel/PHP trusted execution adapter (vds.expr/1 engine, server re-validation, fail-closed RBAC, scoped atomic idempotency, redacted audit).",
+    "description": "VDS Universal Form Builder \u2014 Laravel/PHP trusted execution adapter (vds.expr/1 engine, server re-validation, fail-closed RBAC, scoped atomic idempotency, redacted audit).",
     "type": "library",
     "license": "Apache-2.0",
     "require": {
-        "php": ">=8.1"
+        "php": ">=8.2"
     },
     "require-dev": {
-        "illuminate/http": "^10.0 || ^11.0"
+        "illuminate/http": "^11.0 || ^12.0 || ^13.0"
     },
     "suggest": {
         "illuminate/http": "Required only for the LaravelController HTTP integration in a host app.",
@@ -23,6 +23,7 @@
         "test": [
             "php tests/run-conformance.php",
             "php tests/run-form-conformance.php",
+            "php tests/run-asset-conformance.php",
             "php tests/run-idempotency-parity.php",
             "php tests/run-submission.php",
             "php tests/run-controller.php",

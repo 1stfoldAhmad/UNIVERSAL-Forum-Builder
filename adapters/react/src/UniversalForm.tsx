@@ -243,6 +243,9 @@ export function UniversalForm({ controller, locale, onSubmitted, submitLabel, cl
   const snap = useFormSnapshot(controller);
   const loc = locale ?? controller.ir.localization.defaultLocale;
   const [stepIndex, setStepIndex] = useState(0);
+  // Layout state for tabs / accordion (canonical layout nodes).
+  const [tabIndex, setTabIndex] = useState<Record<string, number>>({});
+  const [openPanels, setOpenPanels] = useState<Record<string, boolean>>({});
   const [advancing, setAdvancing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const fieldById = useMemo(() => new Map(controller.ir.fields.map((f) => [f.id, f])), [controller]);
@@ -332,13 +335,89 @@ export function UniversalForm({ controller, locale, onSubmitted, submitLabel, cl
         </div>
       );
     }
+    if (node.type === 'tabs') {
+      const tabs = node.children ?? [];
+      if (tabs.length === 0) return null;
+      const sel = Math.min(Math.max(tabIndex[key] ?? 0, 0), tabs.length - 1);
+      return (
+        <div key={key} data-testid={node.id ? `tabs-${node.id}` : 'tabs'}>
+          <div role="tablist" style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
+            {tabs.map((t, i) => (
+              <button
+                key={t.id ?? i} type="button" role="tab" aria-selected={i === sel}
+                data-testid={`tab-${node.id ?? key}-${i}`}
+                onClick={() => setTabIndex((m) => ({ ...m, [key]: i }))}
+                style={{ padding: '6px 12px', border: '1px solid #ccc', borderRadius: 6, background: i === sel ? '#eef2ff' : '#fff', fontWeight: i === sel ? 600 : 400 }}
+              >
+                {t.title ? localize(t.title, loc) : `Tab ${i + 1}`}
+              </button>
+            ))}
+          </div>
+          <div role="tabpanel">{renderLayout(tabs[sel], `${key}-${sel}`)}</div>
+        </div>
+      );
+    }
+    if (node.type === 'accordion') {
+      return (
+        <div key={key} data-testid={node.id ? `accordion-${node.id}` : 'accordion'}>
+          {(node.children ?? []).map((child, i) => {
+            const panelKey = `${key}-${child.id ?? i}`;
+            const open = openPanels[panelKey] ?? false;
+            return (
+              <div key={panelKey} style={{ border: '1px solid #e0e0e0', borderRadius: 6, marginBottom: 6 }}>
+                <button
+                  type="button" aria-expanded={open}
+                  data-testid={`accordion-toggle-${child.id ?? i}`}
+                  onClick={() => setOpenPanels((m) => ({ ...m, [panelKey]: !open }))}
+                  style={{ width: '100%', textAlign: 'left', padding: '8px 12px', background: '#fafafa', border: 'none', cursor: 'pointer' }}
+                >
+                  {child.title ? localize(child.title, loc) : `Section ${i + 1}`}
+                </button>
+                {open ? <div style={{ padding: 12 }}>{renderLayout(child, `${panelKey}-body`)}</div> : null}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+    if (node.type === 'fieldset') {
+      return (
+        <fieldset key={key} data-testid={node.id ? `fieldset-${node.id}` : 'fieldset'} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 14, marginBottom: 16 }}>
+          {title ? <legend>{title}</legend> : null}
+          {fields}
+          {(node.children ?? []).map((c, i) => renderLayout(c, `${key}-${i}`))}
+        </fieldset>
+      );
+    }
+    if (node.type === 'summary') {
+      const ids = node.fieldRefs ?? [];
+      const shown = ids.length
+        ? ids.map((id) => fieldById.get(id)).filter((f): f is NonNullable<typeof f> => !!f)
+        : controller.ir.fields.filter((f) => !f.parentId && !['group', 'repeater'].includes(f.type));
+      return (
+        <dl key={key} data-testid={node.id ? `summary-${node.id}` : 'summary'}>
+          {shown.filter((f) => snap.visibility[f.id] !== false && f.type !== 'hidden').map((f) => (
+            <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+              <dt style={{ color: '#555' }}>{localize(f.label, loc)}</dt>
+              <dd style={{ margin: 0, fontWeight: 600 }} data-testid={`summary-value-${f.id}`}>{String(snap.values[f.key] ?? '—')}</dd>
+            </div>
+          ))}
+        </dl>
+      );
+    }
     if (node.type === 'divider') return <hr key={key} style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '14px 0' }} />;
     if (node.type === 'text') return <p key={key} style={{ color: '#444' }}>{node.text ? localize(node.text, loc) : ''}</p>;
     if (node.type === 'repeater') { const f = node.repeaterRef ? fieldById.get(node.repeaterRef) : undefined; return f ? renderField(f, f.key) : null; }
     const isRow = node.type === 'row' || node.type === 'columns';
+    const KNOWN_LAYOUT = new Set(['section', 'group', 'step', 'tab', 'row', 'columns']);
     return (
       <section key={key} style={{ marginBottom: 16 }} aria-label={title} data-testid={node.id ? `layout-${node.id}` : undefined}>
         {title ? <h3 style={{ margin: '0 0 10px' }}>{title}</h3> : null}
+        {!KNOWN_LAYOUT.has(node.type) ? (
+          <p role="note" data-testid={`unsupported-layout-${node.id ?? key}`} style={{ color: '#8d6e00' }}>
+            Unsupported layout node: {node.type}
+          </p>
+        ) : null}
         <div style={isRow ? { display: 'grid', gridTemplateColumns: `repeat(${Math.max(1, (node.fieldRefs?.length ?? 0) + (node.children?.length ?? 0))}, 1fr)`, gap: 12 } : undefined}>
           {fields}
           {(node.children ?? []).map((c, i) => renderLayout(c, `${key}-${i}`))}

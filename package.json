@@ -6,7 +6,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.5"
   },
   "workspaces": [
     "packages/*",
@@ -32,7 +32,11 @@
     "test:laravel": "cd execution-adapters/laravel && php tests/run-conformance.php",
     "build:packages": "node scripts/build-packages.mjs",
     "pack:packages": "node scripts/pack-packages.mjs",
-    "test:packages": "node scripts/package-smoke.mjs"
+    "test:packages": "node scripts/package-smoke.mjs",
+    "capabilities": "node --experimental-strip-types scripts/gen-capability-mirrors.mjs",
+    "capabilities:check": "node --experimental-strip-types scripts/gen-capability-mirrors.mjs --check",
+    "support-matrix": "node scripts/gen-support-matrix.mjs",
+    "support-matrix:check": "node scripts/gen-support-matrix.mjs --check"
   },
   "devDependencies": {
     "@angular/common": "^22.2.4",

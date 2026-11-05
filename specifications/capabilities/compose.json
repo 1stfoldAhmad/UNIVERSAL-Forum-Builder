@@ -1,0 +1,300 @@
+{
+  "target": "compose",
+  "contractVersion": "1.0.0",
+  "fieldTypes": {
+    "text": {
+      "fieldType": "text",
+      "supported": true
+    },
+    "textarea": {
+      "fieldType": "textarea",
+      "supported": true
+    },
+    "email": {
+      "fieldType": "email",
+      "supported": true
+    },
+    "password": {
+      "fieldType": "password",
+      "supported": true
+    },
+    "url": {
+      "fieldType": "url",
+      "supported": true
+    },
+    "phone": {
+      "fieldType": "phone",
+      "supported": true
+    },
+    "integer": {
+      "fieldType": "integer",
+      "supported": true
+    },
+    "decimal": {
+      "fieldType": "decimal",
+      "supported": true
+    },
+    "currency": {
+      "fieldType": "currency",
+      "supported": true
+    },
+    "percentage": {
+      "fieldType": "percentage",
+      "supported": true
+    },
+    "duration": {
+      "fieldType": "duration",
+      "supported": true
+    },
+    "date": {
+      "fieldType": "date",
+      "supported": true
+    },
+    "time": {
+      "fieldType": "time",
+      "supported": true
+    },
+    "datetime": {
+      "fieldType": "datetime",
+      "supported": true
+    },
+    "select": {
+      "fieldType": "select",
+      "supported": true
+    },
+    "multiselect": {
+      "fieldType": "multiselect",
+      "supported": true
+    },
+    "radio": {
+      "fieldType": "radio",
+      "supported": true
+    },
+    "checkbox": {
+      "fieldType": "checkbox",
+      "supported": true
+    },
+    "switch": {
+      "fieldType": "switch",
+      "supported": true
+    },
+    "consent": {
+      "fieldType": "consent",
+      "supported": true
+    },
+    "rating": {
+      "fieldType": "rating",
+      "supported": true
+    },
+    "range": {
+      "fieldType": "range",
+      "supported": true
+    },
+    "color": {
+      "fieldType": "color",
+      "supported": true
+    },
+    "file": {
+      "fieldType": "file",
+      "supported": true
+    },
+    "image": {
+      "fieldType": "image",
+      "supported": true
+    },
+    "computed": {
+      "fieldType": "computed",
+      "supported": true
+    },
+    "hidden": {
+      "fieldType": "hidden",
+      "supported": true
+    },
+    "group": {
+      "fieldType": "group",
+      "supported": true
+    },
+    "repeater": {
+      "fieldType": "repeater",
+      "supported": true
+    },
+    "barcode": {
+      "fieldType": "barcode",
+      "supported": true
+    }
+  },
+  "features": {
+    "dragDrop": false,
+    "filePicker": false,
+    "camera": false,
+    "offlineQueue": false,
+    "draftPersistence": false,
+    "multiStep": true,
+    "repeaters": true,
+    "richText": false,
+    "signature": false
+  },
+  "featureStatus": {
+    "multiStep": {
+      "status": "supported"
+    },
+    "repeaters": {
+      "status": "supported"
+    },
+    "localization": {
+      "status": "supported"
+    },
+    "accessibility": {
+      "status": "supported"
+    },
+    "submissionGuard": {
+      "status": "supported"
+    },
+    "uploadProgress": {
+      "status": "supported"
+    },
+    "uploadCancel": {
+      "status": "supported"
+    },
+    "filePicker": {
+      "status": "requires-host-adapter",
+      "requires": [
+        "FilePickerAdapter",
+        "UploadAdapter"
+      ],
+      "reason": "Renderer wires selection, progress, cancel and asset refs; no picker dependency is bundled."
+    },
+    "camera": {
+      "status": "requires-host-adapter",
+      "requires": [
+        "CameraAdapter",
+        "UploadAdapter"
+      ],
+      "reason": "Capture is delegated to a host camera adapter."
+    },
+    "barcode": {
+      "status": "requires-host-adapter",
+      "requires": [
+        "BarcodeAdapter"
+      ],
+      "reason": "Scanning is delegated to a host scanner adapter."
+    },
+    "draftPersistence": {
+      "status": "requires-host-adapter",
+      "requires": [
+        "DraftAdapter"
+      ],
+      "reason": "save/restore/clear implemented; durable storage is host-supplied."
+    },
+    "offlineQueue": {
+      "status": "unsupported",
+      "reason": "No offline submission queue is implemented on this target."
+    },
+    "dragDrop": {
+      "status": "unsupported",
+      "reason": "No drag-and-drop source on Android Compose."
+    },
+    "richText": {
+      "status": "unsupported",
+      "reason": "No rich-text editor is implemented."
+    },
+    "signature": {
+      "status": "unsupported",
+      "reason": "No signature pad is implemented; the control states this explicitly."
+    }
+  },
+  "fieldStatus": {
+    "file": {
+      "status": "requires-host-adapter",
+      "requires": [
+        "FilePickerAdapter",
+        "UploadAdapter"
+      ]
+    },
+    "image": {
+      "status": "requires-host-adapter",
+      "requires": [
+        "FilePickerAdapter",
+        "UploadAdapter"
+      ]
+    },
+    "barcode": {
+      "status": "requires-host-adapter",
+      "requires": [
+        "BarcodeAdapter"
+      ]
+    },
+    "signature": {
+      "status": "unsupported",
+      "reason": "No signature pad is implemented."
+    },
+    "color": {
+      "status": "supported",
+      "reason": "Fixed accessible palette plus hex readout."
+    },
+    "date": {
+      "status": "supported"
+    },
+    "time": {
+      "status": "supported"
+    },
+    "datetime": {
+      "status": "supported"
+    },
+    "multiselect": {
+      "status": "supported"
+    },
+    "radio": {
+      "status": "supported"
+    }
+  },
+  "layoutStatus": {
+    "section": {
+      "status": "supported"
+    },
+    "group": {
+      "status": "supported"
+    },
+    "row": {
+      "status": "supported"
+    },
+    "columns": {
+      "status": "supported"
+    },
+    "tabs": {
+      "status": "supported"
+    },
+    "tab": {
+      "status": "supported"
+    },
+    "accordion": {
+      "status": "supported"
+    },
+    "steps": {
+      "status": "supported"
+    },
+    "step": {
+      "status": "supported"
+    },
+    "fieldset": {
+      "status": "supported"
+    },
+    "summary": {
+      "status": "supported"
+    },
+    "repeater": {
+      "status": "supported"
+    },
+    "divider": {
+      "status": "supported"
+    },
+    "text": {
+      "status": "supported"
+    }
+  },
+  "evidence": {
+    "unit": "gradle :core:test (adapters/compose)",
+    "ci": ".github/workflows/ci.yml job: compose",
+    "device": "pending — no physical-device verification performed"
+  }
+}

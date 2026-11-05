@@ -1,0 +1,59 @@
+{
+  "format": "vds.form",
+  "specVersion": "1.0.0",
+  "id": "layout-nodes",
+  "metadata": { "name": "Layout node coverage", "version": "1.0.0" },
+  "fields": [
+    { "id": "fullName", "type": "text", "key": "fullName", "label": "Full name", "required": true },
+    { "id": "email", "type": "email", "key": "email", "label": "Email" },
+    { "id": "city", "type": "text", "key": "city", "label": "City" },
+    { "id": "postcode", "type": "text", "key": "postcode", "label": "Postcode" },
+    { "id": "tabTwoNote", "type": "text", "key": "tabTwoNote", "label": "Second tab note" },
+    { "id": "accordionNote", "type": "text", "key": "accordionNote", "label": "Accordion note" },
+    { "id": "fieldsetNote", "type": "text", "key": "fieldsetNote", "label": "Fieldset note" },
+    { "id": "stepTwoNote", "type": "text", "key": "stepTwoNote", "label": "Step two note" },
+    {
+      "id": "contacts", "type": "repeater", "key": "contacts", "label": "Contacts",
+      "minItems": 1,
+      "children": [
+        { "id": "contactName", "type": "text", "key": "contacts[].contactName", "label": "Contact name" }
+      ]
+    }
+  ],
+  "layout": {
+    "type": "section",
+    "id": "root",
+    "title": "Layout coverage",
+    "children": [
+      { "type": "text", "id": "intro", "text": "Every canonical layout node appears below." },
+      { "type": "divider", "id": "rule" },
+      { "type": "group", "id": "grp", "title": "Grouped", "fieldRefs": ["fullName"] },
+      { "type": "row", "id": "rw", "title": "Row", "fieldRefs": ["email", "city"] },
+      { "type": "columns", "id": "cols", "title": "Columns", "fieldRefs": ["postcode"] },
+      {
+        "type": "tabs", "id": "tbs",
+        "children": [
+          { "type": "tab", "id": "tabA", "title": "Tab A", "fieldRefs": ["fullName"] },
+          { "type": "tab", "id": "tabB", "title": "Tab B", "fieldRefs": ["tabTwoNote"] }
+        ]
+      },
+      {
+        "type": "accordion", "id": "acc",
+        "children": [
+          { "type": "section", "id": "accPanel", "title": "More details", "fieldRefs": ["accordionNote"] }
+        ]
+      },
+      { "type": "fieldset", "id": "fs", "title": "Fieldset", "fieldRefs": ["fieldsetNote"] },
+      { "type": "repeater", "id": "repNode", "repeaterRef": "contacts" },
+      {
+        "type": "steps", "id": "wiz",
+        "children": [
+          { "type": "step", "id": "s1", "title": "Step one", "fieldRefs": ["fullName"] },
+          { "type": "step", "id": "s2", "title": "Step two", "fieldRefs": ["stepTwoNote"] },
+          { "type": "summary", "id": "sum", "title": "Review", "fieldRefs": ["fullName", "email"] }
+        ]
+      }
+    ]
+  },
+  "submission": { "operationRef": "test:layout.create" }
+}

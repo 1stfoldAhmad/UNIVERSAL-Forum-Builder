@@ -15,8 +15,10 @@ describe('vds.form 1.0.0 JSON Schema', () => {
   });
 
   const examples = readdirSync(formsDir).filter((f) => f.endsWith('.vds.json'));
-  it('has the 9 canonical example forms', () => {
-    expect(examples.length).toBe(9);
+  // 10 since layout-nodes.vds.json was added to cover all 14 canonical layout
+  // nodes; every example is still individually schema-validated below.
+  it('has the 10 canonical example forms', () => {
+    expect(examples.length).toBe(10);
   });
   for (const file of examples) {
     it(`validates example ${file}`, () => {

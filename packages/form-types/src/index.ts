@@ -523,15 +523,47 @@ export interface FieldCapability {
   requiresNativeModule: boolean;
   fallbackStrategy?: string;
 }
+/**
+ * Explicit capability status. A capability may only be `supported` when it is
+ * implemented, wired into the renderer, covered by tests AND usable.
+ *  - supported             : works out of the box on this target
+ *  - partial               : works with documented limitations (`reason`)
+ *  - unsupported           : not implemented on this target
+ *  - requires-host-adapter : renderer code exists but needs an injected host
+ *                            adapter (`requires`) before it can be used
+ */
+export type CapabilityStatus = 'supported' | 'partial' | 'unsupported' | 'requires-host-adapter';
+
+export interface CapabilityDetail {
+  status: CapabilityStatus;
+  /** Host adapters that must be injected for a requires-host-adapter capability. */
+  requires?: string[];
+  /** Why a capability is partial/unsupported. */
+  reason?: string;
+}
+
 export interface RendererCapabilityManifest {
   target: string;
   contractVersion: string;
   fieldTypes: Record<string, FieldCapability>;
+  /**
+   * Boolean shorthand: true ONLY when the explicit status is `supported`.
+   * Kept for the compiler's capability negotiation; `featureStatus` is the
+   * authoritative, non-lossy description.
+   */
   features: {
     dragDrop?: boolean; camera?: boolean; filePicker?: boolean;
     offlineQueue?: boolean; draftPersistence?: boolean; multiStep?: boolean;
     repeaters?: boolean; richText?: boolean; signature?: boolean;
   };
+  /** Authoritative per-feature status (see CapabilityStatus). */
+  featureStatus?: Record<string, CapabilityDetail>;
+  /** Explicit per-field status, overriding the registry default for this target. */
+  fieldStatus?: Record<string, CapabilityDetail>;
+  /** Per-layout-node status for all 14 canonical layout node types. */
+  layoutStatus?: Record<string, CapabilityDetail>;
+  /** Test/CI evidence backing the claims (never inferred from compilation). */
+  evidence?: Record<string, string>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -555,4 +587,35 @@ export interface PluginManifest {
   /** 'sandboxed'/'untrusted' are rejected until a real isolation adapter exists.
    * Omitted trust is treated as host-registered trusted code (legacy). */
   trust?: 'trusted' | 'sandboxed' | 'untrusted';
+}
+
+/**
+ * The 14 canonical layout node types (vds.form 1.0.0). Mirrors
+ * specifications/json-schema/vds-form-1.0.0.schema.json `$defs/layoutNode`.
+ * Renderers must implement every one of them or report it explicitly.
+ */
+export const CANONICAL_LAYOUT_NODES = [
+  'section', 'group', 'row', 'columns', 'tabs', 'tab', 'accordion', 'steps',
+  'step', 'fieldset', 'summary', 'repeater', 'divider', 'text',
+] as const;
+
+/** Convenience constructors for explicit capability statuses. */
+export const capSupported = (): CapabilityDetail => ({ status: 'supported' });
+export const capUnsupported = (reason: string): CapabilityDetail => ({ status: 'unsupported', reason });
+export const capPartial = (reason: string): CapabilityDetail => ({ status: 'partial', reason });
+export const capHostAdapter = (requires: string[], reason: string): CapabilityDetail => ({
+  status: 'requires-host-adapter', requires, reason,
+});
+
+/** Derives the boolean shorthand from explicit statuses (true only if supported). */
+export function featuresFromStatus(status: Record<string, CapabilityDetail>): RendererCapabilityManifest['features'] {
+  const keys = ['dragDrop', 'camera', 'filePicker', 'offlineQueue', 'draftPersistence', 'multiStep', 'repeaters', 'richText', 'signature'] as const;
+  const out: Record<string, boolean> = {};
+  for (const k of keys) if (status[k]) out[k] = status[k].status === 'supported';
+  return out;
+}
+
+/** All-14 layout nodes marked supported (targets that implement the full set). */
+export function allLayoutsSupported(): Record<string, CapabilityDetail> {
+  return Object.fromEntries(CANONICAL_LAYOUT_NODES.map((n) => [n, capSupported()]));
 }

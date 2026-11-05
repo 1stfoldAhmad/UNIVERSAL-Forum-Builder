@@ -182,6 +182,9 @@ export const VUniversalForm = defineComponent({
     const ctrl = toRaw(props.controller);
     const snap = useFormSnapshot(ctrl);
     const stepIndex = ref(0);
+    // Layout state for tabs / accordion (canonical layout nodes).
+    const tabIndex = ref<Record<string, number>>({});
+    const openPanels = ref<Record<string, boolean>>({});
     const submitting = ref(false);
 
     const fieldById = new Map(ctrl.ir.fields.map((f) => [f.id, f]));
@@ -244,14 +247,67 @@ export const VUniversalForm = defineComponent({
           ]),
         ]);
       }
+      if (node.type === 'tabs') {
+        const tabs = node.children ?? [];
+        if (!tabs.length) return null;
+        const sel = Math.min(Math.max(tabIndex.value[key] ?? 0, 0), tabs.length - 1);
+        return h('div', { key, 'data-testid': node.id ? `tabs-${node.id}` : 'tabs' }, [
+          h('div', { role: 'tablist', style: 'display:flex;gap:4px;margin-bottom:10px;' }, tabs.map((t, i) => h('button', {
+            key: t.id ?? i, type: 'button', role: 'tab', 'aria-selected': i === sel,
+            'data-testid': `tab-${node.id ?? key}-${i}`,
+            style: `padding:6px 12px;border:1px solid #ccc;border-radius:6px;background:${i === sel ? '#eef2ff' : '#fff'};font-weight:${i === sel ? 600 : 400};`,
+            onClick: () => { tabIndex.value = { ...tabIndex.value, [key]: i }; },
+          }, t.title ? localize(t.title, loc()) : `Tab ${i + 1}`))),
+          h('div', { role: 'tabpanel' }, [renderLayout(tabs[sel], `${key}-${sel}`)]),
+        ]);
+      }
+      if (node.type === 'accordion') {
+        return h('div', { key, 'data-testid': node.id ? `accordion-${node.id}` : 'accordion' }, (node.children ?? []).map((child, i) => {
+          const panelKey = `${key}-${child.id ?? i}`;
+          const open = openPanels.value[panelKey] ?? false;
+          return h('div', { key: panelKey, style: 'border:1px solid #e0e0e0;border-radius:6px;margin-bottom:6px;' }, [
+            h('button', {
+              type: 'button', 'aria-expanded': open, 'data-testid': `accordion-toggle-${child.id ?? i}`,
+              style: 'width:100%;text-align:left;padding:8px 12px;background:#fafafa;border:none;cursor:pointer;',
+              onClick: () => { openPanels.value = { ...openPanels.value, [panelKey]: !open }; },
+            }, child.title ? localize(child.title, loc()) : `Section ${i + 1}`),
+            open ? h('div', { style: 'padding:12px;' }, [renderLayout(child, `${panelKey}-body`)]) : null,
+          ]);
+        }));
+      }
+      if (node.type === 'fieldset') {
+        return h('fieldset', { key, 'data-testid': node.id ? `fieldset-${node.id}` : 'fieldset', style: 'border:1px solid #ddd;border-radius:8px;padding:14px;margin-bottom:16px;' }, [
+          title ? h('legend', null, title) : null,
+          ...fields,
+          ...(node.children ?? []).map((c, i) => renderLayout(c, `${key}-${i}`)),
+        ]);
+      }
+      if (node.type === 'summary') {
+        const ids = node.fieldRefs ?? [];
+        const shown = ids.length
+          ? ids.map((id) => fieldById.get(id)).filter(Boolean)
+          : ctrl.ir.fields.filter((f) => !f.parentId && !['group', 'repeater'].includes(f.type));
+        return h('dl', { key, 'data-testid': node.id ? `summary-${node.id}` : 'summary' },
+          shown.filter((f) => f && snap.value.visibility[f.id] !== false && f.type !== 'hidden').map((f) => h('div', { key: f!.id, style: 'display:flex;justify-content:space-between;padding:4px 0;' }, [
+            h('dt', { style: 'color:#555;' }, localize(f!.label, loc())),
+            h('dd', { style: 'margin:0;font-weight:600;', 'data-testid': `summary-value-${f!.id}` }, String(snap.value.values[f!.key] ?? '—')),
+          ])));
+      }
       if (node.type === 'divider') return h('hr', { key, style: 'border:none;border-top:1px solid #e0e0e0;margin:14px 0;' });
       if (node.type === 'text') return h('p', { key, style: 'color:#444;' }, node.text ? localize(node.text, loc()) : '');
       if (node.type === 'repeater') { const f = node.repeaterRef ? fieldById.get(node.repeaterRef) : undefined; return f ? renderField(f, f.key) : null; }
-      return h('section', { key, style: 'margin-bottom:16px;', 'aria-label': title }, [
+      const knownLayout = new Set(['section', 'group', 'step', 'tab', 'row', 'columns']);
+      const isRow = node.type === 'row' || node.type === 'columns';
+      const cols = Math.max(1, (node.fieldRefs?.length ?? 0) + (node.children?.length ?? 0));
+      const sectionStyle = isRow
+        ? `margin-bottom:16px;display:grid;grid-template-columns:repeat(${cols},1fr);gap:12px;`
+        : 'margin-bottom:16px;';
+      return h('section', { key, style: sectionStyle, 'aria-label': title, 'data-testid': node.id ? `layout-${node.id}` : undefined }, [
         title ? h('h3', { style: 'margin:0 0 10px;' }, title) : null,
+        !knownLayout.has(node.type) ? h('p', { role: 'note', 'data-testid': `unsupported-layout-${node.id ?? key}`, style: 'color:#8d6e00;' }, `Unsupported layout node: ${node.type}`) : null,
         ...fields,
         ...(node.children ?? []).map((c, i) => renderLayout(c, `${key}-${i}`)),
-      ]);
+      ].filter(Boolean));
     };
 
     const doSubmit = async () => {
