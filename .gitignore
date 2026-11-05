@@ -13,3 +13,6 @@ benchmarks/results/*.json.tmp
 .release/
 .build/
 tsconfig.build.tmp.json
+
+# Next.js build output
+examples/nextjs-app/.next/
