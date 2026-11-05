@@ -146,7 +146,7 @@ describe('Vue upload correctness (shared semantics)', () => {
     controller.dispose(); wrapper.unmount();
   });
 
-  it('de-duplicates a repeated file instead of uploading it twice', async () => {
+  it('preserves distinct same-name file selections instead of conflating them', async () => {
     const p = new TestUploadProvider();
     const { controller, wrapper } = await mountForm('kyc-documents.vds.json', { uploadProvider: p });
     const dz = wrapper.get('[data-testid="dropzone-kyc.proofDocs"]');
@@ -154,8 +154,8 @@ describe('Vue upload correctness (shared semantics)', () => {
     await tick();
     await dz.trigger('drop', { dataTransfer: { files: [pdf('a.pdf')] } });
     await tick();
-    expect(p.assets.size).toBe(1);
-    expect((controller.getFieldValue('kyc.proofDocs') as unknown[]).length).toBe(1);
+    expect(p.assets.size).toBe(2);
+    expect((controller.getFieldValue('kyc.proofDocs') as unknown[]).length).toBe(2);
     controller.dispose(); wrapper.unmount();
   });
 });

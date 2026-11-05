@@ -74,12 +74,20 @@ describe('uploadAssetBatch', () => {
     const { p, calls } = provider();
     const existing: UploadedAssetRef[] = [{ assetRef: 'r', name: 'a', mimeType: 'application/pdf', sizeBytes: 10 }];
     const r = await uploadAssetBatch({
-      files: [file('a', 10)], provider: p, multiple: true, source: 'picker',
+      files: [{ ...file('a', 10), assetRef: 'r' }], provider: p, multiple: true, source: 'picker',
       currentValue: existing, commit: () => {},
     });
     expect(calls).toHaveLength(0);
     expect(r.uploaded).toHaveLength(0);
     expect(r.failures).toHaveLength(0);
+  });
+
+  it('does not conflate different files with matching name and size', async () => {
+    const { p, calls } = provider();
+    const sameNameSameSize = [file('scan.pdf', 10), file('scan.pdf', 10)];
+    const result = await uploadAssetBatch({ files: sameNameSameSize, provider: p, multiple: true, source: 'picker', commit: () => {} });
+    expect(result.uploaded).toHaveLength(2);
+    expect(calls).toHaveLength(2);
   });
 
   it('trims extra files on a single-value field and reports them', async () => {
@@ -168,7 +176,13 @@ describe('mimeAllowed', () => {
   it('matches exact types, wildcards and extensions like server validation', () => {
     expect(mimeAllowed('image/png', ['image/png'])).toBe(true);
     expect(mimeAllowed('image/png', ['image/*'])).toBe(true);
-    expect(mimeAllowed('application/pdf', ['.pdf'])).toBe(true);
+    expect(mimeAllowed('image/jpeg', ['.jpg'], 'PHOTO.JPG')).toBe(true);
+    expect(mimeAllowed('image/jpeg', ['.jpeg'], 'photo.jpeg')).toBe(true);
+    expect(mimeAllowed('image/png', ['.png'], 'PHOTO.PNG')).toBe(true);
+    expect(mimeAllowed('application/pdf', ['.pdf'], 'file.PDF')).toBe(true);
+    expect(mimeAllowed('application/pdf', ['.jpg'], 'file.pdf')).toBe(false);
+    expect(mimeAllowed('application/pdf', ['.pdf'], 'file.pdf')).toBe(true);
+    expect(mimeAllowed('application/pdf', ['.pdf'])).toBe(false);
     expect(mimeAllowed('image/png', ['application/pdf'])).toBe(false);
     expect(mimeAllowed('image/png', undefined)).toBe(true);
     expect(mimeAllowed('image/png', [])).toBe(true);

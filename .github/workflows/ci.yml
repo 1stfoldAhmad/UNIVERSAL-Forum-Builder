@@ -48,6 +48,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Fetch + build vendored VDS logic engine
+        run: npm run setup:vds
       - name: Install TS deps (to generate shared IR fixtures)
         run: npm ci --no-audit --no-fund
       - name: Generate compiled IR fixtures from the TS compiler

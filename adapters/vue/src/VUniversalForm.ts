@@ -41,12 +41,13 @@ const VField = defineComponent({
       uploadError.value = null;
       uploading.value = true;
       const result = await uploadAssetBatch({
-        files: Array.from(files).map((f) => ({ name: f.name, size: f.size, type: f.type })),
+        files: Array.from(files).map((f) => ({ name: f.name, size: f.size, type: f.type, identity: f })),
         provider: ctrl.uploadProvider,
         constraints: { accept: props.field.validation.accept, maxSizeBytes: props.field.validation.maxSizeBytes },
         multiple: props.field.validation.multiple,
         source,
         currentValue: ctrl.getFieldValue(props.path),
+        getCurrentValue: () => ctrl.getFieldValue(props.path),
         auth: ctrl.auth,
         signal: ac.signal,
         commit: (v) => set(v),
