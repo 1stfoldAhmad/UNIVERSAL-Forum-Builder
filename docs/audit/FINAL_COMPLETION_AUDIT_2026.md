@@ -37,6 +37,10 @@ All commands were run in this workspace against the starting source plus the des
 - `npx vitest run` — **346 tests passed in 32 files** on Node 22.22.3 (core, web, Angular, Expo RN-web and Node HTTP). This run does not include Flutter, Compose, SwiftUI, Node 24 or Node 26.
 - `npx tsx tools/cli/src/bin.ts conformance` — **96/96 passed**.
 - `npm run build:packages && npm run pack:packages && npm run test:packages` — pass; package build/pack and fresh external consumer smoke completed, no publication.
+- `cd examples/nextjs-app && npm run build` — pass (Next.js 16.4.5 production App Router build).
+- Next.js built-server smoke — GET `/` returned 200 SSR HTML; forged-auth POST returned `400 AUTH_IN_BODY_FORBIDDEN`.
+- Python distribution: both Django packages built as wheels and installed into a fresh `/tmp` virtual environment with Django 5.2.19; imports `django`, `vds_form`, and `vds_form_renderer` succeeded. Setuptools emitted a deprecation warning for the existing TOML license table.
+- `npx playwright install chromium` — blocked locally: `cdn.playwright.dev` is outside the sandbox's outbound allowlist. Playwright hydration E2E is configured in GitHub CI; no local browser E2E result is claimed.
 - Django execution adapter: `.venv/bin/python -m pytest -q` from `execution-adapters/django` — **75 passed**.
 - Django renderer: `.venv/bin/python -m pytest -q` from `adapters/django` — **12 passed**.
 
@@ -45,6 +49,12 @@ The system Python initially lacked pytest; a repository-local ignored `.venv` wa
 ## Security and boundaries
 
 Django asset validation was updated; no Django CSRF/authentication code was changed. Existing real-middleware CSRF tests remain in the source. This run did not rerun the Laravel 13 application lifecycle, nor independently audit all CSRF flows. No production Database/API or Auth/RBAC Builder provider was introduced. Host applications must supply real registered operations and server-derived trusted identity; TEST adapters remain test-only. The independent Expo SDK 58 project was not touched. No packages were published and no PR was merged.
+
+## GitHub Actions evidence
+
+- [Run 41984919034](https://github.com/1stfoldAhmad/UNIVERSAL-Forum-Builder/actions/runs/41984919034), commit `d45ed660`: Node 22/24/26 passed; all nine Django 5.2/6.1 × Python 3.10–3.15 combinations passed; Composer/PHP adapter, Laravel 13 installation/check and Compose core/UI compile passed. Flutter stopped at the newly added Dart-format check, so analyze/widget tests did not run. SwiftUI remained queued at last observation.
+- [Run 41987046525](https://github.com/1stfoldAhmad/UNIVERSAL-Forum-Builder/actions/runs/41987046525), commit `d72b421`: Flutter still failed at the formatter step. Later formatter and manifest corrections have been pushed; their run status must be checked before handoff. Latest-head run links are listed by `gh run list` on the working branch.
+- The CI job named “Laravel 13 renderer integration” is not proof of full Laravel middleware/HTTP lifecycle: `tests/run-laravel13.php` still manually invokes `process()` after creating a framework Request. The acceptance item remains partial.
 
 ## Remaining blockers / partial work
 
