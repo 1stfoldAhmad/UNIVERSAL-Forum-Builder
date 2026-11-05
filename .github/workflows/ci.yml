@@ -131,8 +131,22 @@ jobs:
         with:
           channel: stable
           cache: true
-      - name: Dart format check
-        run: cd adapters/flutter && dart format --set-exit-if-changed .
+      - name: Dart format check — capabilities
+        run: cd adapters/flutter && dart format --set-exit-if-changed lib/src/capabilities.dart
+      - name: Dart format check — controller
+        run: cd adapters/flutter && dart format --set-exit-if-changed lib/src/controller.dart
+      - name: Dart format check — expressions
+        run: cd adapters/flutter && dart format --set-exit-if-changed lib/src/expr.dart
+      - name: Dart format check — validation
+        run: cd adapters/flutter && dart format --set-exit-if-changed lib/src/validation.dart
+      - name: Dart format check — widgets
+        run: cd adapters/flutter && dart format --set-exit-if-changed lib/src/widgets.dart
+      - name: Dart format check — controller tests
+        run: cd adapters/flutter && dart format --set-exit-if-changed test/controller_test.dart
+      - name: Dart format check — widget tests
+        run: cd adapters/flutter && dart format --set-exit-if-changed test/widget_test.dart
+      - name: Dart format check — expression tests
+        run: cd adapters/flutter && dart format --set-exit-if-changed test/expr_conformance_test.dart
       - name: Flutter analyze
         run: cd adapters/flutter && flutter analyze
       - name: Flutter unit and widget tests

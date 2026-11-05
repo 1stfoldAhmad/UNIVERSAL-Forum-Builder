@@ -98,7 +98,10 @@ final class ControllerTest: XCTestCase {
         let m = Capabilities.manifest()
         XCTAssertEqual(m["target"] as? String, "swiftui")
         let ft = m["fieldTypes"] as! [String: Any]
-        XCTAssertNotNil(ft["text"])
-        XCTAssertNil(ft["signature"])
+        XCTAssertEqual((ft["text"] as? [String: String])?["status"], "partial")
+        XCTAssertEqual((ft["signature"] as? [String: String])?["status"], "unsupported")
+        let features = m["features"] as! [String: [String: String]]
+        XCTAssertEqual(features["camera"]?["status"], "unsupported")
+        XCTAssertEqual(features["offlineQueue"]?["status"], "unsupported")
     }
 }

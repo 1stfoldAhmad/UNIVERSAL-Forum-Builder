@@ -23,7 +23,8 @@ This audit supersedes any older completion language that implies all requested p
 6. Added a built-in Node HTTP integration with method/content-type checks, bounded parsing, body-auth rejection, injected trusted identity, correlation IDs, safe errors and HTTP status mapping; added HTTP lifecycle tests.
 7. Raised root and Node execution package engine floors to `>=22.5` and declared Node 22/24/26 CI matrix jobs; remote matrix outcomes remain pending.
 8. Added controller-level duplicate-submit guards in Flutter, Compose and SwiftUI, disabled their submit actions while in-flight, and retained retry keys for unchanged payloads while issuing a new key when payload changes. Deferred concurrency/retry tests were added, but no Dart/Gradle/Swift toolchain is available locally to execute them.
-9. Added the platform-neutral renderer conformance contract and a cautious support matrix. The matrix explicitly records that this commit does not verify all native or cross-language targets.
+9. Normalized Flutter/Compose/SwiftUI capability manifests to explicit per-field/feature statuses. File/image pickers, camera, signature, offline queue and durable drafts are marked unsupported unless they require a host adapter; no boolean optimism remains. Added assertions, but native verification is pending CI.
+10. Added the platform-neutral renderer conformance contract and a cautious support matrix. The matrix explicitly records that this commit does not verify all native or cross-language targets.
 
 ## Exact local verification
 

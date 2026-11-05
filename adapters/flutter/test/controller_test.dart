@@ -97,6 +97,17 @@ void main() {
     },
   );
 
+  test('capability manifest does not overclaim native adapters', () {
+    final fields =
+        flutterCapabilityManifest['fieldTypes'] as Map<String, dynamic>;
+    final features =
+        flutterCapabilityManifest['features'] as Map<String, dynamic>;
+    expect(fields['signature']['status'], 'unsupported');
+    expect(fields['file']['status'], 'unsupported');
+    expect(features['camera']['status'], 'unsupported');
+    expect(features['offlineQueue']['status'], 'unsupported');
+  });
+
   test('submit delegates to the injected trusted transport', () async {
     Map<String, dynamic>? sent;
     final c = FormController(

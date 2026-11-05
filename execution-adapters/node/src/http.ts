@@ -57,7 +57,8 @@ export function createNodeHttpHandler(options: NodeHttpOptions): (req: IncomingM
     const supplied = req.headers['x-correlation-id'];
     const correlationId = typeof supplied === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(supplied) ? supplied : randomUUID();
     const finish = (status: number, outcome: string, body: unknown): void => {
-      options.log?.({ correlationId, statusCode: status, outcome });
+      try { options.log?.({ correlationId, statusCode: status, outcome }); }
+      catch { console.error(`VDS HTTP logger failed for correlation ${correlationId}.`); }
       respond(res, status, correlationId, body);
     };
     void (async () => {

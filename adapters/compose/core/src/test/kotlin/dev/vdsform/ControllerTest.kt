@@ -111,6 +111,11 @@ class ControllerTest {
         @Suppress("UNCHECKED_CAST")
         val ft = m["fieldTypes"] as Map<String, Any?>
         assertTrue(ft.containsKey("text"))
-        assertTrue(!ft.containsKey("signature"))
+        assertEquals("partial", (ft["text"] as Map<*, *>)["status"])
+        assertEquals("unsupported", (ft["signature"] as Map<*, *>)["status"])
+        @Suppress("UNCHECKED_CAST")
+        val features = m["features"] as Map<String, Map<String, String>>
+        assertEquals("unsupported", features["camera"]?.get("status"))
+        assertEquals("unsupported", features["offlineQueue"]?.get("status"))
     }
 }
