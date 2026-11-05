@@ -10,8 +10,12 @@ import 'package:flutter/foundation.dart';
 import 'expr.dart';
 import 'validation.dart';
 
-typedef SubmissionTransport = Future<Map<String, dynamic>> Function(
-    String formId, Map<String, dynamic> values, String idempotencyKey);
+typedef SubmissionTransport =
+    Future<Map<String, dynamic>> Function(
+      String formId,
+      Map<String, dynamic> values,
+      String idempotencyKey,
+    );
 
 abstract class DraftAdapter {
   Future<void> save(String formId, Map<String, dynamic> values);
@@ -20,7 +24,12 @@ abstract class DraftAdapter {
 }
 
 abstract class UploadAdapter {
-  Future<Map<String, dynamic>> upload(String fieldPath, String name, List<int> bytes, String mimeType);
+  Future<Map<String, dynamic>> upload(
+    String fieldPath,
+    String name,
+    List<int> bytes,
+    String mimeType,
+  );
 }
 
 class FormController extends ChangeNotifier {
@@ -41,15 +50,23 @@ class FormController extends ChangeNotifier {
   String? _retrySignature;
   String? _retryKey;
 
-  FormController({required this.ir, Map<String, dynamic>? initialValues, this.transport, this.drafts, this.uploads, String? locale})
-      : locale = locale ?? (ir['localization']?['defaultLocale'] as String? ?? 'en') {
+  FormController({
+    required this.ir,
+    Map<String, dynamic>? initialValues,
+    this.transport,
+    this.drafts,
+    this.uploads,
+    String? locale,
+  }) : locale =
+           locale ?? (ir['localization']?['defaultLocale'] as String? ?? 'en') {
     values = Map<String, dynamic>.from(initialValues ?? {});
   }
 
   void initialize() {
     for (final f in (ir['fields'] as List)) {
       if (f['parentId'] != null || f['repeaterId'] != null) continue;
-      if (f.containsKey('defaultValue') && getPath(values, f['key'] as String) == null) {
+      if (f.containsKey('defaultValue') &&
+          getPath(values, f['key'] as String) == null) {
         values = setIn(values, f['key'] as String, f['defaultValue']);
       }
     }
@@ -58,9 +75,14 @@ class FormController extends ChangeNotifier {
       final rows = getPath(values, f['key'] as String);
       final list = rows is List ? List<Object?>.from(rows) : <Object?>[];
       final min = (f['validation']?['minItems'] ?? f['minItems'] ?? 0) as int;
-      while (list.length < min) { list.add(<String, dynamic>{}); }
+      while (list.length < min) {
+        list.add(<String, dynamic>{});
+      }
       values = setIn(values, f['key'] as String, list);
-      repeaterRows[f['id'] as String] = List.generate(list.length, (i) => 'row-${_rowSeq++}');
+      repeaterRows[f['id'] as String] = List.generate(
+        list.length,
+        (i) => 'row-${_rowSeq++}',
+      );
     }
     _recompute();
   }
@@ -72,18 +94,31 @@ class FormController extends ChangeNotifier {
       for (final formula in formulas) {
         final target = formula['target'] as String;
         if (target.contains('[]')) {
-          final repKey = target.split('[]').first.replaceAll(RegExp(r'\.$'), '');
+          final repKey = target
+              .split('[]')
+              .first
+              .replaceAll(RegExp(r'\.$'), '');
           final rows = getPath(values, repKey);
           final n = rows is List ? rows.length : 0;
           for (var i = 0; i < n; i++) {
             final concrete = target.replaceFirst('[]', '.$i');
-            final r = evaluate((formula['expr'] as Map).cast<String, dynamic>(),
-                {'values': values, 'rowPrefix': '$repKey.$i', 'rowIndex': i});
-            if (r.ok && getPath(values, concrete) != r.value) { values = setIn(values, concrete, r.value); changed = true; }
+            final r = evaluate(
+              (formula['expr'] as Map).cast<String, dynamic>(),
+              {'values': values, 'rowPrefix': '$repKey.$i', 'rowIndex': i},
+            );
+            if (r.ok && getPath(values, concrete) != r.value) {
+              values = setIn(values, concrete, r.value);
+              changed = true;
+            }
           }
         } else {
-          final r = evaluate((formula['expr'] as Map).cast<String, dynamic>(), {'values': values});
-          if (r.ok && getPath(values, target) != r.value) { values = setIn(values, target, r.value); changed = true; }
+          final r = evaluate((formula['expr'] as Map).cast<String, dynamic>(), {
+            'values': values,
+          });
+          if (r.ok && getPath(values, target) != r.value) {
+            values = setIn(values, target, r.value);
+            changed = true;
+          }
         }
       }
       if (!changed) break;
@@ -100,21 +135,30 @@ class FormController extends ChangeNotifier {
   }
 
   void addRepeaterItem(String repeaterId) {
-    final f = (ir['fields'] as List).firstWhere((x) => x['id'] == repeaterId) as Map;
-    final rows = List<Object?>.from(getPath(values, f['key'] as String) as List? ?? []);
+    final f =
+        (ir['fields'] as List).firstWhere((x) => x['id'] == repeaterId) as Map;
+    final rows = List<Object?>.from(
+      getPath(values, f['key'] as String) as List? ?? [],
+    );
     rows.add(<String, dynamic>{});
     values = setIn(values, f['key'] as String, rows);
-    repeaterRows[repeaterId] = [...(repeaterRows[repeaterId] ?? []), 'row-${_rowSeq++}'];
+    repeaterRows[repeaterId] = [
+      ...(repeaterRows[repeaterId] ?? []),
+      'row-${_rowSeq++}',
+    ];
     _recompute();
     notifyListeners();
   }
 
   void removeRepeaterItem(String repeaterId, String rowId) {
-    final f = (ir['fields'] as List).firstWhere((x) => x['id'] == repeaterId) as Map;
+    final f =
+        (ir['fields'] as List).firstWhere((x) => x['id'] == repeaterId) as Map;
     final ids = repeaterRows[repeaterId] ?? [];
     final idx = ids.indexOf(rowId);
     if (idx < 0) return;
-    final rows = List<Object?>.from(getPath(values, f['key'] as String) as List? ?? []);
+    final rows = List<Object?>.from(
+      getPath(values, f['key'] as String) as List? ?? [],
+    );
     rows.removeAt(idx);
     values = setIn(values, f['key'] as String, rows);
     ids.removeAt(idx);
@@ -123,12 +167,17 @@ class FormController extends ChangeNotifier {
   }
 
   void moveRepeaterItem(String repeaterId, int from, int to) {
-    final f = (ir['fields'] as List).firstWhere((x) => x['id'] == repeaterId) as Map;
-    final rows = List<Object?>.from(getPath(values, f['key'] as String) as List? ?? []);
+    final f =
+        (ir['fields'] as List).firstWhere((x) => x['id'] == repeaterId) as Map;
+    final rows = List<Object?>.from(
+      getPath(values, f['key'] as String) as List? ?? [],
+    );
     final ids = repeaterRows[repeaterId] ?? [];
     if (from < 0 || to < 0 || from >= rows.length || to >= rows.length) return;
-    final item = rows.removeAt(from); rows.insert(to, item);
-    final id = ids.removeAt(from); ids.insert(to, id);
+    final item = rows.removeAt(from);
+    rows.insert(to, item);
+    final id = ids.removeAt(from);
+    ids.insert(to, id);
     values = setIn(values, f['key'] as String, rows);
     _recompute();
     notifyListeners();
@@ -140,8 +189,9 @@ class FormController extends ChangeNotifier {
     return issues;
   }
 
-  List<Map<String, dynamic>> errorsFor(String path) =>
-      issues.where((i) => i['path'] == path && i['severity'] == 'error').toList();
+  List<Map<String, dynamic>> errorsFor(String path) => issues
+      .where((i) => i['path'] == path && i['severity'] == 'error')
+      .toList();
 
   Future<Map<String, dynamic>> submit() async {
     if (status == 'submitting') {
@@ -153,14 +203,19 @@ class FormController extends ChangeNotifier {
     }
     final found = validate();
     if (found.any((i) => i['severity'] == 'error')) {
-      status = 'invalid'; statusMessage = 'Please correct the errors below.'; notifyListeners();
+      status = 'invalid';
+      statusMessage = 'Please correct the errors below.';
+      notifyListeners();
       return {'status': 'server-validation-failed', 'issues': found};
     }
     if (transport == null) {
-      status = 'failed'; statusMessage = 'No submission transport configured.'; notifyListeners();
+      status = 'failed';
+      statusMessage = 'No submission transport configured.';
+      notifyListeners();
       return {'status': 'config-error', 'code': 'NO_TRANSPORT'};
     }
-    status = 'submitting'; notifyListeners();
+    status = 'submitting';
+    notifyListeners();
     final signature = jsonEncode(values);
     if (_retrySignature != signature || _retryKey == null) {
       _retrySignature = signature;
@@ -175,15 +230,22 @@ class FormController extends ChangeNotifier {
         _retryKey = null;
         _retrySignature = null;
       }
-      statusMessage = result['status'] == 'succeeded' ? 'Submitted successfully.' : (result['message'] as String? ?? result['status'] as String);
-      if (result['status'] == 'server-validation-failed') issues = List<Map<String, dynamic>>.from(result['issues'] as List);
+      statusMessage = result['status'] == 'succeeded'
+          ? 'Submitted successfully.'
+          : (result['message'] as String? ?? result['status'] as String);
+      if (result['status'] == 'server-validation-failed')
+        issues = List<Map<String, dynamic>>.from(result['issues'] as List);
       notifyListeners();
       return result;
     } catch (e) {
-      status = 'failed'; statusMessage = e.toString(); notifyListeners();
+      status = 'failed';
+      statusMessage = e.toString();
+      notifyListeners();
       return {'status': 'config-error', 'message': e.toString()};
     }
   }
 
-  Future<void> saveDraft() async { if (drafts != null) await drafts!.save(ir['formId'] as String, values); }
+  Future<void> saveDraft() async {
+    if (drafts != null) await drafts!.save(ir['formId'] as String, values);
+  }
 }
