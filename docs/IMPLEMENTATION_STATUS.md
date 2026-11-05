@@ -43,7 +43,7 @@ Current measured follow-up: 346 Vitest tests / 32 files pass on Node 22.22.3; ty
 | 6 | Laravel 13 full integration (HTTP/auth/CSRF/persistence, PHP matrix) | **partial** | Runtime dependency declared; real Laravel 13 lifecycle tests and PHP matrix remain unverified |
 | 7 | Django/Python compatibility matrix + warnings | **partial** | 5.2 / Python 3.11 verified locally; matrix declared but all other combinations pending |
 | 8 | Node 22/24/26 matrix, engines, HTTP surface | **partial** | Engine floor and built-in HTTP adapter implemented; local Node 22 tests pass; Node 24/26 remote results pending |
-| 9 | Existing renderer field-by-field parity + Next.js example | in-progress | Upload parity done (Phase 1); Next.js example outstanding |
+| 9 | Existing renderer field-by-field parity + Next.js example | **partial** | Next.js App Router example builds and SSR/API smoke passes; Playwright hydration CI pending; broader renderer field parity remains outstanding |
 | 10 | Generated `PLATFORM_SUPPORT_MATRIX.md` | **partial** | Conservative matrix exists but is not generated from uniform manifests; no optimism claims |
 | 11 | Cross-language conformance expansion (26 areas) | in-progress | expressions 62 + forms 11 + idempotency/limits/security shared today |
 | 12 | CI matrices for every target | in-progress | 7 jobs green; version matrices outstanding |

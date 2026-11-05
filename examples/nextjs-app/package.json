@@ -1,0 +1,22 @@
+{
+  "name": "@vds-form/example-nextjs-app",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0"
+  },
+  "dependencies": {
+    "@vds-form/core": "*",
+    "@vds-form/react": "*",
+    "@vds-form/execution-node": "*",
+    "next": "16.4.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  }
+}

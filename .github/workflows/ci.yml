@@ -40,6 +40,26 @@ jobs:
       - name: Fresh external-project package smoke test
         run: npm run test:packages
 
+  nextjs:
+    name: Next.js App Router SSR + hydration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Fetch + build vendored VDS logic engine
+        run: npm run setup:vds
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build App Router example
+        run: cd examples/nextjs-app && npm run build
+      - name: Install Playwright browser
+        run: cd examples/nextjs-app && npx playwright install --with-deps chromium
+      - name: Run SSR, hydration and trusted route browser tests
+        run: cd examples/nextjs-app && npm run test:e2e
+
   django:
     name: Django ${{ matrix.django }} / Python ${{ matrix.python }}
     runs-on: ubuntu-latest

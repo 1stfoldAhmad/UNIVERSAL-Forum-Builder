@@ -24,7 +24,8 @@ This audit supersedes any older completion language that implies all requested p
 7. Raised root and Node execution package engine floors to `>=22.5` and declared Node 22/24/26 CI matrix jobs; remote matrix outcomes remain pending.
 8. Added controller-level duplicate-submit guards in Flutter, Compose and SwiftUI, disabled their submit actions while in-flight, and retained retry keys for unchanged payloads while issuing a new key when payload changes. Deferred concurrency/retry tests were added, but no Dart/Gradle/Swift toolchain is available locally to execute them.
 9. Normalized Flutter/Compose/SwiftUI capability manifests to explicit per-field/feature statuses. File/image pickers, camera, signature, offline queue and durable drafts are marked unsupported unless they require a host adapter; no boolean optimism remains. Added assertions, but native verification is pending CI.
-10. Added the platform-neutral renderer conformance contract and a cautious support matrix. The matrix explicitly records that this commit does not verify all native or cross-language targets.
+10. Added a real Next.js App Router example with Server Component composition, JSON-only client boundary, client-side form initialization, trusted server route and Playwright SSR/hydration tests. Local production build and HTTP smoke pass; browser automation is pending CI.
+11. Added the platform-neutral renderer conformance contract and a cautious support matrix. The matrix explicitly records that this commit does not verify all native or cross-language targets.
 
 ## Exact local verification
 
@@ -51,7 +52,7 @@ Django asset validation was updated; no Django CSRF/authentication code was chan
 - Laravel 13 still needs actual service-provider/route/controller/session/CSRF request-lifecycle and fresh-consumer tests; the existing manual Request/process path is not sufficient proof.
 - Django requested full Django 5.2 / 6.1 and Python 3.10–3.15 compatible matrices were not run. Confirm supported official patch availability and metadata before claiming those combinations.
 - Node HTTP boundary is implemented and locally tested on Node 22.22.3. Remote Node 22/24/26 matrix results remain pending.
-- Next.js App Router example and SSR/hydration CI integration remain outstanding.
+- Next.js App Router example now exists; `npm run build` and local SSR/API smoke pass. Playwright hydration E2E is declared in CI but its browser job has not yet completed on this head.
 - React/Vue/Angular/Expo full field/layout/accessibility/localization conformance audit remains outstanding.
 - Shared renderer conformance specification is now documented but six-language fixture execution and actual native UI-level tests are not established.
 - Capability manifests are not uniform enough to produce a truthful generated support matrix; current matrix is a conservative manually audited snapshot, not generated evidence.
