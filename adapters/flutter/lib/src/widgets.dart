@@ -63,7 +63,11 @@ class _VdsFormState extends State<VdsForm> {
           ),
         _layout((ir['layout'] as Map).cast<String, dynamic>()),
         const SizedBox(height: 16),
-        FilledButton(key: const Key('vds-submit'), onPressed: c.status == 'submitting' ? null : c.submit, child: Text(widget.submitLabel)),
+        FilledButton(
+          key: const Key('vds-submit'),
+          onPressed: c.status == 'submitting' ? null : c.submit,
+          child: Text(widget.submitLabel),
+        ),
       ]),
     );
   }

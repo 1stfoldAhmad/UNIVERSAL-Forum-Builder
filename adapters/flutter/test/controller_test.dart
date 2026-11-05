@@ -57,7 +57,13 @@ void main() {
     final c = FormController(
       ir: loadIr('customer-registration'),
       initialValues: {'customer': {'name': 'Ada Lovelace', 'email': 'ada@example.com', 'type': 'individual', 'consent': true}},
-      transport: (formId, values, key) { calls++; keys.add(key); return calls == 1 ? gate.future : Future.value({'status': 'succeeded'}); },
+      transport: (formId, values, key) {
+        calls++;
+        keys.add(key);
+        return calls == 1
+            ? gate.future
+            : Future.value({'status': 'succeeded'});
+      },
     );
     c.initialize();
     final first = c.submit();

@@ -144,7 +144,13 @@ class FormController extends ChangeNotifier {
       issues.where((i) => i['path'] == path && i['severity'] == 'error').toList();
 
   Future<Map<String, dynamic>> submit() async {
-    if (status == 'submitting') return {'status': 'business-rejected', 'code': 'SUBMISSION_IN_PROGRESS', 'message': 'A submission is already in progress.'};
+    if (status == 'submitting') {
+      return {
+        'status': 'business-rejected',
+        'code': 'SUBMISSION_IN_PROGRESS',
+        'message': 'A submission is already in progress.',
+      };
+    }
     final found = validate();
     if (found.any((i) => i['severity'] == 'error')) {
       status = 'invalid'; statusMessage = 'Please correct the errors below.'; notifyListeners();
@@ -158,13 +164,17 @@ class FormController extends ChangeNotifier {
     final signature = jsonEncode(values);
     if (_retrySignature != signature || _retryKey == null) {
       _retrySignature = signature;
-      _retryKey = 'flutter-${DateTime.now().millisecondsSinceEpoch}-${_rowSeq++}';
+      _retryKey =
+          'flutter-${DateTime.now().millisecondsSinceEpoch}-${_rowSeq++}';
     }
     final key = _retryKey!;
     try {
       final result = await transport!(ir['formId'] as String, values, key);
       status = result['status'] == 'succeeded' ? 'succeeded' : 'failed';
-      if (result['status'] == 'succeeded') { _retryKey = null; _retrySignature = null; }
+      if (result['status'] == 'succeeded') {
+        _retryKey = null;
+        _retrySignature = null;
+      }
       statusMessage = result['status'] == 'succeeded' ? 'Submitted successfully.' : (result['message'] as String? ?? result['status'] as String);
       if (result['status'] == 'server-validation-failed') issues = List<Map<String, dynamic>>.from(result['issues'] as List);
       notifyListeners();
