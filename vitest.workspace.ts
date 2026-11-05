@@ -53,6 +53,21 @@ export default defineWorkspace([
     },
   },
   {
+    esbuild: { jsx: 'automatic' },
+    resolve: {
+      // `server-only` throws outside the RSC runtime; the real guard is verified
+      // by `next build`. See tests/stubs/server-only.ts.
+      alias: { 'server-only': new URL('./tests/stubs/server-only.ts', import.meta.url).pathname },
+    },
+    test: {
+      name: 'nextjs',
+      environment: 'node',
+      globals: true,
+      include: ['examples/next-app/tests/**/*.test.ts', 'examples/next-app/tests/**/*.test.tsx'],
+      exclude: ['**/node_modules/**', '**/.next/**'],
+    },
+  },
+  {
     test: {
       name: 'angular',
       environment: 'jsdom',

@@ -230,7 +230,7 @@ run is recorded in `docs/audit/FINAL_COMPLETION_AUDIT_2026.md` with its run id.
 | `flutter` | ubuntu-latest | single configuration |
 | `compose` | ubuntu-latest | single configuration |
 | `swiftui` | macos-latest | single configuration |
-| `packaging` | ubuntu-latest | package: execution-adapters/django, adapters/django |
+| `packaging` | ubuntu-latest | single configuration |
 
 ## Packaging evidence
 

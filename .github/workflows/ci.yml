@@ -135,7 +135,14 @@ jobs:
           coverage: none
           tools: composer:v2
       - name: Validate composer manifest
-        run: cd execution-adapters/laravel && composer validate --strict --no-check-publish
+        run: |
+          cd execution-adapters/laravel
+          set +e
+          composer validate --strict --no-check-publish > /tmp/cv.log 2>&1
+          code=$?
+          cat /tmp/cv.log
+          if [ $code -ne 0 ]; then grep -viE '^\s*$' /tmp/cv.log | head -20 | sed 's/^/::error::/'; fi
+          exit $code
       - name: Install Composer dev deps (illuminate/http for the real-Request integration check)
         run: cd execution-adapters/laravel && composer update --no-interaction --prefer-dist --no-progress
       - name: Run all PHP suites (expression + form + asset conformance, idempotency, handler, controller, security)
@@ -162,9 +169,23 @@ jobs:
           coverage: none
           tools: composer:v2
       - name: Validate composer manifest
-        run: cd adapters/laravel && composer validate --strict --no-check-publish
+        run: |
+          cd adapters/laravel
+          set +e
+          composer validate --strict --no-check-publish > /tmp/cv.log 2>&1
+          code=$?
+          cat /tmp/cv.log
+          if [ $code -ne 0 ]; then grep -viE '^\s*$' /tmp/cv.log | head -20 | sed 's/^/::error::/'; fi
+          exit $code
       - name: Fresh consumer install (Laravel 13 + path-linked execution adapter)
-        run: cd adapters/laravel && composer update --no-interaction --prefer-dist --no-progress
+        run: |
+          cd adapters/laravel
+          set +e
+          composer update --no-interaction --prefer-dist --no-progress > /tmp/cu.log 2>&1
+          code=$?
+          tail -60 /tmp/cu.log
+          if [ $code -ne 0 ]; then grep -iE 'problem|require|conflict|could not|error' /tmp/cu.log | head -30 | sed 's/^/::error::/'; fi
+          exit $code
       - name: Run the real Laravel 13 HTTP integration suite
         run: |
           cd adapters/laravel
@@ -187,7 +208,14 @@ jobs:
       - name: Resolve Dart dependencies
         run: cd adapters/flutter && flutter pub get
       - name: Static analysis
-        run: cd adapters/flutter && flutter analyze
+        run: |
+          cd adapters/flutter
+          set +e
+          flutter analyze > /tmp/analyze.log 2>&1
+          code=$?
+          tail -80 /tmp/analyze.log
+          if [ $code -ne 0 ]; then grep -E '^\s*(error|warning|info)' /tmp/analyze.log | head -40 | sed 's/^/::error::/'; fi
+          exit $code
       - name: Formatting is canonical
         run: |
           cd adapters/flutter
@@ -211,7 +239,14 @@ jobs:
           if [ $code -ne 0 ]; then grep -E 'Error|error:|Expected|Actual|FAILED|Failed|Exception' /tmp/flutter.log | head -45 | sed 's/^/::error::/'; fi
           exit $code
       - name: Publish dry-run (packaging validation, never publishes)
-        run: cd adapters/flutter && flutter pub publish --dry-run
+        run: |
+          cd adapters/flutter
+          set +e
+          flutter pub publish --dry-run > /tmp/pub.log 2>&1
+          code=$?
+          tail -60 /tmp/pub.log
+          if [ $code -ne 0 ]; then grep -viE '^\s*$' /tmp/pub.log | head -40 | sed 's/^/::error::/'; fi
+          exit $code
 
   compose:
     name: Compose renderer (core tests + UI compile + UI tests)
@@ -299,23 +334,48 @@ jobs:
   packaging:
     name: Python packaging (wheel build + fresh install)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        package: ['execution-adapters/django', 'adapters/django']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Build wheel + sdist
+      - name: Build both wheels + sdists
         run: |
+          set +e
           python3 -m pip install --upgrade build
-          cd ${{ matrix.package }} && python3 -m build
-      - name: Fresh virtualenv install of the built wheel
+          (cd execution-adapters/django && python3 -m build) > /tmp/build1.log 2>&1
+          c1=$?
+          (cd adapters/django && python3 -m build) > /tmp/build2.log 2>&1
+          c2=$?
+          tail -20 /tmp/build1.log; tail -20 /tmp/build2.log
+          if [ $c1 -ne 0 ] || [ $c2 -ne 0 ]; then
+            grep -iE 'error|invalid|failed|Traceback' /tmp/build1.log /tmp/build2.log | head -30 | sed 's/^/::error::/'
+            exit 1
+          fi
+      - name: Fresh virtualenv install (both local wheels; nothing is published)
         run: |
+          set +e
           python3 -m venv /tmp/fresh
-          /tmp/fresh/bin/pip install ${{ matrix.package }}/dist/*.whl
-          /tmp/fresh/bin/python -c "import importlib,sys; m=importlib.import_module('vds_form' if 'execution-adapters' in '${{ matrix.package }}' else 'vds_form_renderer'); print('imported', m.__name__)"
-      - name: Installed distribution exposes its declared dependencies
-        run: /tmp/fresh/bin/pip show $( [ "${{ matrix.package }}" = "execution-adapters/django" ] && echo vds-form-django || echo vds-form-renderer-django )
+          # The renderer declares vds-form-django as a runtime dependency. Neither
+          # package is published, so both wheels are installed from this build.
+          /tmp/fresh/bin/pip install execution-adapters/django/dist/*.whl adapters/django/dist/*.whl > /tmp/pip.log 2>&1
+          code=$?
+          tail -30 /tmp/pip.log
+          if [ $code -ne 0 ]; then grep -iE 'error|no matching|conflict' /tmp/pip.log | head -30 | sed 's/^/::error::/'; exit $code; fi
+      - name: Both distributions import in the fresh environment
+        run: |
+          set +e
+          /tmp/fresh/bin/python -c "import vds_form, vds_form_renderer; print('imported', vds_form.__name__, vds_form_renderer.__version__)" > /tmp/imp.log 2>&1
+          code=$?
+          cat /tmp/imp.log
+          if [ $code -ne 0 ]; then grep -iE 'Error|No module' /tmp/imp.log | head -20 | sed 's/^/::error::/'; exit $code; fi
+      - name: Declared dependency boundary is present in installed metadata
+        run: |
+          /tmp/fresh/bin/pip show vds-form-django vds-form-renderer-django
+          /tmp/fresh/bin/python -c "
+          from importlib.metadata import requires
+          r = requires('vds-form-renderer-django') or []
+          assert any('vds-form-django' in x for x in r), r
+          assert any('Django' in x for x in r), r
+          print('renderer runtime deps:', r)
+          "

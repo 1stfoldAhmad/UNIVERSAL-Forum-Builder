@@ -300,8 +300,15 @@ export class TrustedSubmissionHandler {
         result = { status: 'server-validation-failed', issues: err.issues.map((i) => ({ ...i, source: 'server' as const })) };
       } else if (err.code === 'PERMISSION_DENIED') {
         result = { status: 'permission-denied', code: err.code, message: err.message ?? 'Denied by operation.' };
+      } else if (typeof err.code === 'string' && err.code.length > 0) {
+        // A DELIBERATE business error: the operation opted into a coded,
+        // client-safe message by attaching a code.
+        result = { status: 'business-rejected', code: err.code, message: err.message ?? 'Operation failed.' };
       } else {
-        result = { status: 'business-rejected', code: err.code ?? 'OPERATION_FAILED', message: err.message ?? 'Operation failed.' };
+        // An UNEXPECTED internal failure. Its message may contain connection
+        // strings, credentials, file paths or stack fragments, so it must never
+        // reach the client. The audit sink still records the outcome code.
+        result = { status: 'business-rejected', code: 'OPERATION_FAILED', message: 'The operation could not be completed.' };
       }
     }
     if (result.status === 'succeeded') {
@@ -358,3 +365,5 @@ export function createNodeExecutor(handler: TrustedSubmissionHandler, scheme: st
     },
   };
 }
+
+export * from './http';

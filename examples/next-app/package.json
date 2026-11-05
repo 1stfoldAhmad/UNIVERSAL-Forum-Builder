@@ -1,0 +1,26 @@
+{
+  "name": "@vds-form/example-next-app",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p 3000",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p 3000"
+  },
+  "dependencies": {
+    "@vds-form/compiler": "*",
+    "@vds-form/core": "*",
+    "@vds-form/execution-node": "*",
+    "@vds-form/react": "*",
+    "@vds-form/runtime": "*",
+    "@vds-form/submission": "*",
+    "@vds-form/types": "*",
+    "@vds-form/vds-contracts": "*",
+    "next": "16.4.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "server-only": "0.0.1"
+  }
+}
