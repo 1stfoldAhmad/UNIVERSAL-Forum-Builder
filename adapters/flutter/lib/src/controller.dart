@@ -10,12 +10,11 @@ import 'package:flutter/foundation.dart';
 import 'expr.dart';
 import 'validation.dart';
 
-typedef SubmissionTransport =
-    Future<Map<String, dynamic>> Function(
-      String formId,
-      Map<String, dynamic> values,
-      String idempotencyKey,
-    );
+typedef SubmissionTransport = Future<Map<String, dynamic>> Function(
+  String formId,
+  Map<String, dynamic> values,
+  String idempotencyKey,
+);
 
 abstract class DraftAdapter {
   Future<void> save(String formId, Map<String, dynamic> values);

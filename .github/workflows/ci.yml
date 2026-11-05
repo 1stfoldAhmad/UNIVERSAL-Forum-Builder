@@ -188,6 +188,7 @@ jobs:
           }
           emit_formatted lib/src/controller.dart
           emit_formatted test/controller_test.dart
+          emit_formatted test/expr_conformance_test.dart
       - name: Dart format check — capabilities
         run: cd adapters/flutter && dart format --set-exit-if-changed lib/src/capabilities.dart
       - name: Dart format check — controller

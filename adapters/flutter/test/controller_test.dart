@@ -59,43 +59,38 @@ void main() {
     expect(result['status'], 'server-validation-failed');
   });
 
-  test(
-    'concurrent submit calls execute transport only once and retry keeps the key',
-    () async {
-      var calls = 0;
-      final keys = <String>[];
-      final gate = Completer<Map<String, dynamic>>();
-      final c = FormController(
-        ir: loadIr('customer-registration'),
-        initialValues: {
-          'customer': {
-            'name': 'Ada Lovelace',
-            'email': 'ada@example.com',
-            'type': 'individual',
-            'consent': true,
-          },
+  test('concurrent submit calls execute transport only once and retry keeps the key', () async {
+    var calls = 0;
+    final keys = <String>[];
+    final gate = Completer<Map<String, dynamic>>();
+    final c = FormController(
+      ir: loadIr('customer-registration'),
+      initialValues: {
+        'customer': {
+          'name': 'Ada Lovelace',
+          'email': 'ada@example.com',
+          'type': 'individual',
+          'consent': true,
         },
-        transport: (formId, values, key) {
-          calls++;
-          keys.add(key);
-          return calls == 1
-              ? gate.future
-              : Future.value({'status': 'succeeded'});
-        },
-      );
-      c.initialize();
-      final first = c.submit();
-      await Future<void>.delayed(Duration.zero);
-      final second = await c.submit();
-      expect(second['code'], 'SUBMISSION_IN_PROGRESS');
-      expect(calls, 1);
-      gate.complete({'status': 'business-rejected', 'message': 'retryable'});
-      await first;
-      await c.submit();
-      expect(calls, 2);
-      expect(keys[1], keys[0]);
-    },
-  );
+      },
+      transport: (formId, values, key) {
+        calls++;
+        keys.add(key);
+        return calls == 1 ? gate.future : Future.value({'status': 'succeeded'});
+      },
+    );
+    c.initialize();
+    final first = c.submit();
+    await Future<void>.delayed(Duration.zero);
+    final second = await c.submit();
+    expect(second['code'], 'SUBMISSION_IN_PROGRESS');
+    expect(calls, 1);
+    gate.complete({'status': 'business-rejected', 'message': 'retryable'});
+    await first;
+    await c.submit();
+    expect(calls, 2);
+    expect(keys[1], keys[0]);
+  });
 
   test('capability manifest does not overclaim native adapters', () {
     final fields =
