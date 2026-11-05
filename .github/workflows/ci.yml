@@ -171,6 +171,12 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Diagnose official Dart formatter output (temporary)
+        run: |
+          cd adapters/flutter
+          dart format lib/src/controller.dart
+          encoded=$(base64 -w0 lib/src/controller.dart)
+          echo "::notice file=adapters/flutter/lib/src/controller.dart,line=1::DART_FORMATTED_CONTROLLER_BASE64:$encoded"
       - name: Dart format check — capabilities
         run: cd adapters/flutter && dart format --set-exit-if-changed lib/src/capabilities.dart
       - name: Dart format check — controller
