@@ -1,5 +1,5 @@
-import { defineComponent, h, ref, toRaw, type PropType, type VNode } from 'vue';
-import type { FormController } from '@vds-form/runtime';
+import { defineComponent, h, onUnmounted, ref, toRaw, type PropType, type VNode } from 'vue';
+import { uploadAssetBatch, type FormController } from '@vds-form/runtime';
 import type { LayoutNode, NormalizedField, SubmissionResult, UploadedAssetRef } from '@vds-form/types';
 import { localize } from '@vds-form/validation';
 import { useFormField, useFormSnapshot } from './composables';
@@ -29,27 +29,34 @@ const VField = defineComponent({
 
     const set = (v: unknown) => ctrl.setFieldValue(props.path, v);
 
+    // Shared, partial-success-safe upload semantics (see @vds-form/runtime).
+    // Each success is committed immediately, so a later failure keeps earlier assets.
+    let batch: AbortController | null = null;
+    onUnmounted(() => { batch?.abort(); batch = null; });
+
     const uploadFiles = async (files: FileList | File[], source: 'picker' | 'drag-drop' = 'picker') => {
-      if (!ctrl.uploadProvider) { uploadError.value = 'No upload provider registered.'; return; }
+      if (batch) return; // ignore re-entrant interactions; prevents duplicate uploads
+      const ac = new AbortController();
+      batch = ac;
       uploadError.value = null;
       uploading.value = true;
-      const refs: UploadedAssetRef[] = [];
-      try {
-        for (const file of Array.from(files)) {
-          const r = await ctrl.uploadProvider.upload({
-            asset: { id: `${file.name}-${file.size}`, name: file.name, mimeType: file.type || 'application/octet-stream', sizeBytes: file.size, source },
-            constraints: { accept: props.field.validation.accept, maxSizeBytes: props.field.validation.maxSizeBytes },
-            auth: ctrl.auth,
-          });
-          refs.push(r);
-        }
-        const current = slice.value.value;
-        set(props.field.validation.multiple ? [...(Array.isArray(current) ? (current as UploadedAssetRef[]) : []), ...refs] : refs[0]);
-      } catch (e) {
-        uploadError.value = (e as Error).message;
-      } finally {
-        uploading.value = false;
-      }
+      const result = await uploadAssetBatch({
+        files: Array.from(files).map((f) => ({ name: f.name, size: f.size, type: f.type })),
+        provider: ctrl.uploadProvider,
+        constraints: { accept: props.field.validation.accept, maxSizeBytes: props.field.validation.maxSizeBytes },
+        multiple: props.field.validation.multiple,
+        source,
+        currentValue: ctrl.getFieldValue(props.path),
+        auth: ctrl.auth,
+        signal: ac.signal,
+        commit: (v) => set(v),
+      });
+      if (batch !== ac) return;
+      batch = null;
+      uploading.value = false;
+      uploadError.value = result.failures.length
+        ? result.failures.map((f) => `${f.name ? `${f.name}: ` : ''}${f.message} [${f.code}]`).join(' ')
+        : null;
     };
 
     return () => {

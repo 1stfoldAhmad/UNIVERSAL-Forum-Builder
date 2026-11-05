@@ -4,23 +4,53 @@ Status labels: `not-started` · `in-progress` · `implemented` · `verified` · 
 A row is **verified** only when its acceptance criteria passed via the recorded command.
 Final narrative audit: `docs/FINAL_IMPLEMENTATION_AUDIT.md`.
 
-Last updated: 2026-11-04 (independent-audit remediation on `arena/f7c0405f-universal-forum-builder`, base `main` @ `1fba279`; see `docs/audit/INDEPENDENT_REMEDIATION_2026-11-04.md`. Prior PR #3 is merged. No package publication or merge is authorized for this branch without explicit instruction.)
+Last updated: 2026-11-05 — **2026 completion cycle**, branch `arena/ba37c6a7-universal-forum-builder`, baseline `main` @ `ab85ea7`.
+Baseline evidence: `docs/audit/BASELINE_2026.md`. Phase 1 security report: `docs/audit/SECURITY_REMEDIATION.md`.
+Earlier cycles (PRs #1–#5) are merged; their dated reports remain historical. No package publication is authorized. Physical-device verification remains **pending**.
 
 ## Test totals (actual, this sandbox)
 
 | Suite | Command | Result |
 |---|---|---|
-| TypeScript (all projects) | `npx vitest run` | **283 / 283 pass** (26 files) |
-| — core | `npx vitest run --project core` | 244 pass |
+| TypeScript (all projects) | `npx vitest run` | **331 / 331 pass** (30 files) |
+| — core | `npx vitest run --project core` | 268 pass |
 | — native (Expo via RN-web) | `npx vitest run --project native` | 12 pass |
-| — web (React/Vue/demo) | `npx vitest run --project web` | 19 pass |
-| — angular (JIT) | `npx vitest run --project angular` | 8 pass |
-| Django/Python adapter | `cd execution-adapters/django && python3 -m pytest -q` | **55 / 55 pass** |
+| — web (React/Vue/demo) | `npx vitest run --project web` | 41 pass |
+| — angular (JIT) | `npx vitest run --project angular` | 10 pass |
+| Django/Python execution adapter | `cd execution-adapters/django && python3 -m pytest -q` | **74 / 74 pass** |
+| Django renderer (SSR) | `cd adapters/django && python3 -m pytest -q` | **12 / 12 pass** |
 | Laravel/PHP adapter (PHP-WASM 8.2) | `node execution-adapters/laravel/tests/run-wasm.mjs` | **212 / 212 pass** (10 suites) |
 | Cross-language conformance | `npx tsx tools/cli/src/bin.ts conformance` | **96 / 96 pass** |
-| Idempotency parity (TS/Python/PHP) | shared `fixtures/idempotency.json` | byte-identical in all 3 |
+| Typecheck | `npm run typecheck` | clean |
 | Benchmarks | `npm run bench` | runs; `benchmarks/RESULTS.md` |
 | Package build/pack/smoke | `npm run build:packages && npm run pack:packages && npm run test:packages` | **pass** (fresh external project; no publish) |
+
+> Reproducibility: run `npm run setup:vds` **before** `npm ci`. The reverse order
+> leaves an incomplete vendored `vds-json-logic` and breaks typecheck (see
+> BASELINE_2026 §4). Native toolchains (Dart/JDK/Swift) and real PHP are **not**
+> available in this sandbox; those targets are verified in CI only.
+
+## 2026 completion-cycle phase tracker
+
+| Phase | Scope | Status | Evidence |
+|---|---|---|---|
+| 0 | Baseline + repository audit | **verified** | `docs/audit/BASELINE_2026.md` (measured commands, real outputs) |
+| 1 | Django CSRF + renderer upload correctness + security regression | **verified** | `docs/audit/SECURITY_REMEDIATION.md`; 19 CSRF tests via real middleware; 16 React + 14 shared + 2 Vue + 2 Angular upload tests |
+| 2 | `specifications/renderer-conformance/` contract spec | not-start | — |
+| 3 | Flutter renderer depth (layouts, fields, example, analyze/format gates) | in-progress | Core runtime + 62-case conformance CI-green; layout/widget depth outstanding |
+| 4 | Compose renderer depth (layouts, fields, sample app, a11y) | in-progress | `:core:test` + `:ui:compileDebugKotlin` CI-green; depth outstanding |
+| 5 | SwiftUI renderer depth (layouts, fields, example, a11y) | in-progress | `swift test` CI-green on macOS; depth outstanding |
+| 6 | Laravel 13 full integration (HTTP/auth/CSRF/persistence, PHP matrix) | in-progress | Real PHP 8.3 + Illuminate container CI-green; full app tests outstanding |
+| 7 | Django/Python compatibility matrix + warnings | in-progress | 5.2 / Python 3.11 verified locally; matrix outstanding |
+| 8 | Node 22/24/26 matrix, engines, HTTP surface | not-start | `engines` still `>=20` |
+| 9 | Existing renderer field-by-field parity + Next.js example | in-progress | Upload parity done (Phase 1); Next.js example outstanding |
+| 10 | Generated `PLATFORM_SUPPORT_MATRIX.md` | not-start | — |
+| 11 | Cross-language conformance expansion (26 areas) | in-progress | expressions 62 + forms 11 + idempotency/limits/security shared today |
+| 12 | CI matrices for every target | in-progress | 7 jobs green; version matrices outstanding |
+| 13 | Non-npm packaging evidence (wheel/composer/pub/gradle/swift) | not-start | npm build/pack/smoke verified |
+| 14 | Documentation + final independent audit | in-progress | Baseline + security docs written; remainder outstanding |
+| — | Physical-device verification | **pending** | No devices available; never claimed |
+| — | Real VDS Database/Auth/RBAC integration | **deferred** | Builders do not exist; TEST adapters only |
 
 ## Acceptance-criteria tracker (spec §30)
 

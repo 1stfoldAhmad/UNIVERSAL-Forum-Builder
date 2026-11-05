@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, Pressable, Switch, Modal, FlatList, ScrollView,
   type KeyboardTypeOptions,
 } from 'react-native';
-import type { FormController } from '@vds-form/runtime';
+import { uploadAssetBatch, type FormController } from '@vds-form/runtime';
 import type { FieldOption, NormalizedAsset, NormalizedField, UploadedAssetRef } from '@vds-form/types';
 import { localize } from '@vds-form/validation';
 import { useField } from './hooks';
@@ -278,6 +278,13 @@ export function FileField(props: FieldProps) {
   const slice = useField(controller, path);
   const [progress, setProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const batchRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+  // Disposal: abort in-flight uploads so a late result cannot commit.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; batchRef.current?.abort(); batchRef.current = null; };
+  }, []);
   const isImage = field.type === 'image';
   const multiple = field.validation.multiple === true;
   const picker = isImage ? pickers?.pickImage : pickers?.pickDocument;
@@ -286,30 +293,35 @@ export function FileField(props: FieldProps) {
   const current = slice.value as UploadedAssetRef | UploadedAssetRef[] | null;
 
   const uploadAssets = async (assets: NormalizedAsset[]) => {
-    if (!controller.uploadProvider || assets.length === 0) return;
+    if (assets.length === 0) return;
+    if (batchRef.current) return; // ignore re-entrant interaction
+    const ac = new AbortController();
+    batchRef.current = ac;
     setUploadError(null);
     setProgress(0);
-    const successes: UploadedAssetRef[] = [];
-    const failures: string[] = [];
-    for (const asset of assets) {
-      try {
-        const ref = await controller.uploadProvider.upload({
-          asset,
-          constraints: { accept: field.validation.accept, maxSizeBytes: field.validation.maxSizeBytes },
-          onProgress: setProgress,
-          auth: controller.auth,
-        });
-        successes.push(ref);
-      } catch (e) {
-        failures.push(`${asset.name}: ${(e as Error).message}`);
-      }
+    // Shared semantics: commit after EVERY success so a later failure (or an
+    // unmount) never discards assets that already uploaded.
+    const result = await uploadAssetBatch({
+      files: assets.map((a) => ({
+        name: a.name, size: a.sizeBytes, type: a.mimeType,
+        id: a.id, localUri: a.localUri, source: a.source === 'camera' ? 'camera' : 'picker',
+      })),
+      provider: controller.uploadProvider,
+      constraints: { accept: field.validation.accept, maxSizeBytes: field.validation.maxSizeBytes },
+      multiple,
+      source: 'picker',
+      currentValue: controller.getFieldValue(path),
+      auth: controller.auth,
+      signal: ac.signal,
+      commit: (v) => controller.setFieldValue(path, v),
+      onProgress: (p) => { if (mountedRef.current && batchRef.current === ac) setProgress(p.fraction); },
+    });
+    if (batchRef.current !== ac) return;
+    batchRef.current = null;
+    if (!mountedRef.current) return;
+    if (result.failures.length > 0) {
+      setUploadError(result.failures.map((f) => `${f.name ? `${f.name}: ` : ''}${f.message} [${f.code}]`).join('; '));
     }
-    if (successes.length > 0) {
-      const latest = controller.getFieldValue(path) as UploadedAssetRef | UploadedAssetRef[] | null;
-      const existing = Array.isArray(latest) ? latest : latest ? [latest] : [];
-      controller.setFieldValue(path, multiple ? [...existing, ...successes] : successes[0]);
-    }
-    if (failures.length > 0) setUploadError(failures.join('; '));
     setProgress(null);
   };
 

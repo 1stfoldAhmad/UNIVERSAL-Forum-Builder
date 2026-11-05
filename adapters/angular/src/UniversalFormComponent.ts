@@ -2,7 +2,7 @@ import {
   Component, EventEmitter, Input, OnChanges, OnDestroy, Output, signal, type SimpleChanges,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import type { FormController } from '@vds-form/runtime';
+import { uploadAssetBatch, type FormController } from '@vds-form/runtime';
 import type { FormSnapshot, LayoutNode, LocalizedText, NormalizedField, FieldOption, SubmissionResult, UploadedAssetRef } from '@vds-form/types';
 import { localize } from '@vds-form/validation';
 
@@ -238,7 +238,11 @@ export class UniversalFormComponent implements OnChanges, OnDestroy {
     this.unsub = this.controller.subscribe((s) => this.snap.set(s));
   }
 
-  ngOnDestroy(): void { this.unsub?.(); }
+  ngOnDestroy(): void {
+    this.unsub?.();
+    for (const ac of this.uploadBatches.values()) ac.abort();
+    this.uploadBatches.clear();
+  }
 
   loc(text: LocalizedText | undefined): string {
     return localize(text, this.locale ?? this.controller.ir.localization.defaultLocale);
@@ -308,31 +312,49 @@ export class UniversalFormComponent implements OnChanges, OnDestroy {
     el?.click();
   }
   onPick(path: string, f: NormalizedField, e: Event): void {
-    const files = (e.target as HTMLInputElement).files;
-    if (files) void this.upload(path, f, files);
+    const input = e.target as HTMLInputElement;
+    const files = input.files;
+    if (files) void this.upload(path, f, files, 'picker');
+    input.value = '';
   }
   onDrop(path: string, f: NormalizedField, e: DragEvent): void {
     e.preventDefault();
-    if (e.dataTransfer?.files) void this.upload(path, f, e.dataTransfer.files);
+    if (e.dataTransfer?.files) void this.upload(path, f, e.dataTransfer.files, 'drag-drop');
   }
-  private async upload(path: string, f: NormalizedField, files: FileList): Promise<void> {
-    if (!this.controller.uploadProvider) { this.uploadErrors.update((m) => ({ ...m, [path]: 'No upload provider registered.' })); return; }
+
+  /** In-flight upload batches, aborted on destroy so late results cannot commit. */
+  private uploadBatches = new Map<string, AbortController>();
+
+  private async upload(path: string, f: NormalizedField, files: FileList, source: 'picker' | 'drag-drop'): Promise<void> {
+    if (this.uploadBatches.has(path)) return; // ignore re-entrant interaction
+    const ac = new AbortController();
+    this.uploadBatches.set(path, ac);
     this.uploadErrors.update((m) => { const n = { ...m }; delete n[path]; return n; });
-    const refs: UploadedAssetRef[] = [];
-    try {
-      for (const file of Array.from(files)) {
-        const r = await this.controller.uploadProvider.upload({
-          asset: { id: `${file.name}-${file.size}`, name: file.name, mimeType: file.type || 'application/octet-stream', sizeBytes: file.size, source: 'drag-drop' },
-          constraints: { accept: f.validation.accept, maxSizeBytes: f.validation.maxSizeBytes },
-          auth: this.controller.auth,
-        });
-        refs.push(r);
-      }
-      const current = this.value(path);
-      this.set(path, f.validation.multiple ? [...(Array.isArray(current) ? (current as UploadedAssetRef[]) : []), ...refs] : refs[0]);
-    } catch (err) {
-      this.uploadErrors.update((m) => ({ ...m, [path]: (err as Error).message }));
+    // Shared semantics: commit after EVERY success so a later failure keeps earlier assets.
+    const result = await uploadAssetBatch({
+      files: Array.from(files).map((x) => ({ name: x.name, size: x.size, type: x.type })),
+      provider: this.controller.uploadProvider,
+      constraints: { accept: f.validation.accept, maxSizeBytes: f.validation.maxSizeBytes },
+      multiple: f.validation.multiple,
+      source,
+      currentValue: this.value(path),
+      auth: this.controller.auth,
+      signal: ac.signal,
+      commit: (v) => this.set(path, v),
+    });
+    if (this.uploadBatches.get(path) !== ac) return;
+    this.uploadBatches.delete(path);
+    if (result.failures.length) {
+      this.uploadErrors.update((m) => ({
+        ...m,
+        [path]: result.failures.map((x) => `${x.name ? `${x.name}: ` : ''}${x.message} [${x.code}]`).join(' '),
+      }));
     }
+  }
+
+  cancelUpload(path: string): void {
+    this.uploadBatches.get(path)?.abort();
+    this.uploadBatches.delete(path);
   }
 
   // ---- wizard ----

@@ -32,13 +32,28 @@ def _auth_from_user(user: Any) -> Optional[Dict[str, Any]]:
 def create_form_view(handler: TrustedSubmissionHandler, irs: Dict[str, Dict[str, Any]],
                      auth_resolver: Optional[Callable[[Any], Optional[Dict[str, Any]]]] = None,
                      render_options: Optional[Dict[str, Any]] = None,
-                     base_path: str = "/forms") -> Callable:
+                     base_path: str = "/forms",
+                     *,
+                     csrf_exempt_token_auth: bool = False) -> Callable:
+    """Server-rendered form view. CSRF-protected by default (Phase 1).
+
+    The rendered ``<form>`` already embeds a ``csrfmiddlewaretoken`` hidden input;
+    the view now actually VERIFIES it. ``csrf_exempt_token_auth=True`` is an
+    explicit host opt-out for non-cookie token surfaces only and requires an
+    ``auth_resolver``; see vds_form.django_view for the full conditions.
+    """
+    from django.conf import settings as dj_settings
     from django.http import HttpResponse, JsonResponse
-    from django.views.decorators.csrf import csrf_exempt
+    from django.views.decorators.csrf import csrf_exempt, csrf_protect
+
+    if csrf_exempt_token_auth and auth_resolver is None:
+        raise ValueError(
+            "csrf_exempt_token_auth=True requires an auth_resolver that reads verified "
+            "token claims. CSRF exemption is only safe on a non-cookie token surface."
+        )
 
     opts = render_options or {}
 
-    @csrf_exempt
     def view(request, form_id: str = ""):
         ir = irs.get(form_id)
         if ir is None:
@@ -67,7 +82,12 @@ def create_form_view(handler: TrustedSubmissionHandler, irs: Dict[str, Dict[str,
         if not idempotency_key:
             idempotency_key = f"django-{uuid.uuid4().hex}"
 
-        auth = auth_resolver(request) if auth_resolver is not None else _auth_from_user(getattr(request, "user", None))
+        if csrf_exempt_token_auth:
+            auth = auth_resolver(request)
+            if auth is None and request.COOKIES.get(dj_settings.SESSION_COOKIE_NAME):
+                return JsonResponse({"status": "permission-denied", "code": "CSRF_SESSION_AUTH_FORBIDDEN"}, status=403)
+        else:
+            auth = auth_resolver(request) if auth_resolver is not None else _auth_from_user(getattr(request, "user", None))
         state, _ = compute_effective_state(ir, values)
         payload, issues = build_payload(ir, values, state, ir.get("submission", {})) if ir.get("submission") else (values, [])
         errors = [i for i in issues if i["severity"] == "error"]
@@ -88,4 +108,4 @@ def create_form_view(handler: TrustedSubmissionHandler, irs: Dict[str, Dict[str,
             return HttpResponse(f'<p class="vds-error" role="alert">{result.get("message", result["status"])}</p>', status=status)
         return HttpResponse(render_page(ir, values=values, issues=issues, action=action, **opts), status=status)
 
-    return view
+    return csrf_exempt(view) if csrf_exempt_token_auth else csrf_protect(view)

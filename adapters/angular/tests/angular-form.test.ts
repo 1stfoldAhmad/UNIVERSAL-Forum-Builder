@@ -134,3 +134,41 @@ describe('Angular renderer', () => {
     controller.dispose();
   });
 });
+
+describe('Angular upload correctness (shared semantics)', () => {
+  const pdf = (n: string) => new File(['x'], n, { type: 'application/pdf' });
+  const dropFiles = async (el: HTMLElement, path: string, files: File[]) => {
+    const dz = q(el, `dropzone-${path}`) as HTMLElement;
+    const ev = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(ev, 'dataTransfer', { value: { files } });
+    dz.dispatchEvent(ev);
+    await tick();
+  };
+
+  it('keeps successful uploads when another file in the batch fails', async () => {
+    const uploadProvider = {
+      scheme: 'test',
+      async upload(req: { asset: { name: string; mimeType: string; sizeBytes: number } }) {
+        if (req.asset.name === 'b.pdf') throw new Error('boom b.pdf');
+        return { assetRef: `ref-${req.asset.name}`, name: req.asset.name, mimeType: req.asset.mimeType, sizeBytes: req.asset.sizeBytes };
+      },
+    };
+    const { controller, fixture, el } = await mount('kyc-documents.vds.json', { uploadProvider: uploadProvider as never });
+    await dropFiles(el, 'kyc.proofDocs', [pdf('a.pdf'), pdf('b.pdf'), pdf('c.pdf')]);
+    fixture.detectChanges();
+    const names = (controller.getFieldValue('kyc.proofDocs') as { name: string }[]).map((a) => a.name);
+    expect(names).toEqual(['a.pdf', 'c.pdf']);
+    expect(q(el, 'upload-error-kyc.proofDocs')?.textContent).toContain('b.pdf');
+    controller.dispose();
+  });
+
+  it('rejects a disallowed MIME type before calling the provider', async () => {
+    const p = new TestUploadProvider();
+    const { controller, fixture, el } = await mount('kyc-documents.vds.json', { uploadProvider: p });
+    await dropFiles(el, 'kyc.proofDocs', [new File(['x'], 'nope.png', { type: 'image/png' })]);
+    fixture.detectChanges();
+    expect(p.assets.size).toBe(0);
+    expect(q(el, 'upload-error-kyc.proofDocs')?.textContent).toContain('ASSET_TYPE_REJECTED');
+    controller.dispose();
+  });
+});
